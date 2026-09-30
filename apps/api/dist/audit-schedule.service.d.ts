@@ -1,0 +1,75 @@
+import { PrismaService } from "./prisma.service";
+export type AuditPhase = "INSTRUMENT_REVIEW" | "INSTRUMENT_VERIFICATION" | "SELF_ASSESSMENT" | "SELF_ASSESSMENT_REVIEW" | "FIELD_AUDIT" | "REPORTING" | "FOLLOW_UP";
+export declare class AuditScheduleService {
+    private readonly prisma;
+    constructor(prisma: PrismaService);
+    plan(workspaceId: string): Promise<{
+        id: string;
+        createdAt: Date;
+        status: string;
+        unitId: string;
+        updatedAt: Date;
+        workspaceId: string | null;
+        programId: string;
+        instrumentReviewStart: Date | null;
+        instrumentReviewEnd: Date | null;
+        instrumentVerificationStart: Date | null;
+        instrumentVerificationEnd: Date | null;
+        selfAssessmentStart: Date | null;
+        selfAssessmentEnd: Date | null;
+        selfAssessmentReviewStart: Date | null;
+        selfAssessmentReviewEnd: Date | null;
+        fieldAuditStart: Date | null;
+        fieldAuditEnd: Date | null;
+        reportingStart: Date | null;
+        reportingEnd: Date | null;
+        followUpStart: Date | null;
+        followUpEnd: Date | null;
+        included: boolean;
+    } | null>;
+    private phaseDeadline;
+    state(workspaceId: string, phase: AuditPhase, at?: Date): Promise<{
+        configured: boolean;
+        open: boolean;
+        before: boolean;
+        after: boolean;
+        start: null;
+        end: Date | null;
+        deadline: Date | null;
+        label: string;
+    }>;
+    requireOpen(workspaceId: string, phase: AuditPhase): Promise<{
+        configured: boolean;
+        open: boolean;
+        before: boolean;
+        after: boolean;
+        start: null;
+        end: Date | null;
+        deadline: Date | null;
+        label: string;
+    }>;
+    detail(workspaceId: string): Promise<{
+        id: string;
+        createdAt: Date;
+        status: string;
+        unitId: string;
+        updatedAt: Date;
+        workspaceId: string | null;
+        programId: string;
+        instrumentReviewStart: Date | null;
+        instrumentReviewEnd: Date | null;
+        instrumentVerificationStart: Date | null;
+        instrumentVerificationEnd: Date | null;
+        selfAssessmentStart: Date | null;
+        selfAssessmentEnd: Date | null;
+        selfAssessmentReviewStart: Date | null;
+        selfAssessmentReviewEnd: Date | null;
+        fieldAuditStart: Date | null;
+        fieldAuditEnd: Date | null;
+        reportingStart: Date | null;
+        reportingEnd: Date | null;
+        followUpStart: Date | null;
+        followUpEnd: Date | null;
+        included: boolean;
+    } | null>;
+}
