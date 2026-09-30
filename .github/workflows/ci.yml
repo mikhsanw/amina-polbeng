@@ -1,0 +1,122 @@
+name: SAMI-NONAK CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - agent/align-ami-nonak-workflow
+
+concurrency:
+  group: sami-nonak-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: sami_nonak
+          MYSQL_USER: sami
+          MYSQL_PASSWORD: sami
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -usami -psami"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Generate Prisma client
+        run: npm run prisma:generate
+        env:
+          DATABASE_URL: mysql://sami:sami@127.0.0.1:3306/sami_nonak
+          SHADOW_DATABASE_URL: mysql://root:root@127.0.0.1:3306/sami_nonak_shadow
+
+      - name: Validate Prisma schema
+        run: npx prisma validate
+        env:
+          DATABASE_URL: mysql://sami:sami@127.0.0.1:3306/sami_nonak
+          SHADOW_DATABASE_URL: mysql://root:root@127.0.0.1:3306/sami_nonak_shadow
+
+      - name: Apply database migrations
+        id: migration
+        shell: bash
+        run: |
+          set +e
+          npm run prisma:deploy > migration.log 2>&1
+          status=$?
+          cat migration.log
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit $status
+        env:
+          DATABASE_URL: mysql://sami:sami@127.0.0.1:3306/sami_nonak
+          SHADOW_DATABASE_URL: mysql://root:root@127.0.0.1:3306/sami_nonak_shadow
+
+      - name: Upload migration log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-log
+          path: migration.log
+          if-no-files-found: ignore
+
+      - name: Type check
+        id: typecheck
+        shell: bash
+        run: |
+          set +e
+          npm run typecheck > typecheck.log 2>&1
+          status=$?
+          cat typecheck.log
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit $status
+
+      - name: Upload typecheck log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: typecheck-log
+          path: typecheck.log
+          if-no-files-found: ignore
+
+      - name: Build shared package
+        run: npm run build -w @sami/shared
+
+      - name: Build API
+        run: npm run build -w @sami/api
+
+      - name: Build web
+        id: web_build
+        shell: bash
+        run: |
+          set +e
+          npm run build -w @sami/web > web-build.log 2>&1
+          status=$?
+          cat web-build.log
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit $status
+
+      - name: Upload web build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-build-log
+          path: web-build.log
+          if-no-files-found: ignore

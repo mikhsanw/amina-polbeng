@@ -1,0 +1,39 @@
+{
+  "name": "sami-nonak-polbeng",
+  "version": "1.1.0",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev": "concurrently -n API,WEB -c blue,green \"npm run dev -w @sami/api\" \"npm run dev -w @sami/web\"",
+    "build": "npm run build -w @sami/shared && npm run build -w @sami/api && npm run build -w @sami/web",
+    "lint": "npm run lint -w @sami/api && npm run lint -w @sami/web",
+    "typecheck": "npm run typecheck -w @sami/shared && npm run typecheck -w @sami/api && npm run typecheck -w @sami/web",
+    "test": "npm run test -w @sami/api",
+    "test:e2e": "npm run test:e2e -w @sami/api",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
+    "seed": "prisma db seed",
+    "seed:starter-instruments": "tsx scripts/seed-starter-instruments.ts",
+    "import:system": "tsx scripts/import-system-workbook.ts",
+    "create:superadmin": "tsx scripts/create-superadmin.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "concurrently": "^9.2.0",
+    "prettier": "^3.9.5",
+    "prisma": "^6.12.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.8.0"
+  },
+  "prisma": {
+    "schema": "prisma",
+    "seed": "tsx prisma/seed.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0"
+  }
+}

@@ -1,0 +1,48 @@
+model AuditUnitPlan {
+  id                          String   @id @default(cuid())
+  programId                   String
+  unitId                      String
+  included                    Boolean  @default(true)
+  status                      String   @default("DRAFT")
+  instrumentReviewStart       DateTime?
+  instrumentReviewEnd         DateTime?
+  instrumentVerificationStart DateTime?
+  instrumentVerificationEnd   DateTime?
+  selfAssessmentStart         DateTime?
+  selfAssessmentEnd           DateTime?
+  selfAssessmentReviewStart   DateTime?
+  selfAssessmentReviewEnd     DateTime?
+  fieldAuditStart             DateTime?
+  fieldAuditEnd               DateTime?
+  reportingStart              DateTime?
+  reportingEnd                DateTime?
+  followUpStart               DateTime?
+  followUpEnd                 DateTime?
+  workspaceId                 String?  @unique
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  @@unique([programId, unitId])
+  @@index([programId, status])
+  @@index([unitId, included])
+}
+
+model AuditUnitPlanAssignment {
+  id        String   @id @default(cuid())
+  planId    String
+  userId    String
+  role      String
+  createdAt DateTime @default(now())
+
+  @@unique([planId, userId, role])
+  @@index([planId, role])
+  @@index([userId, role])
+}
+
+model AuditUnitPlanQuestion {
+  planId     String
+  questionId String
+
+  @@id([planId, questionId])
+  @@index([questionId])
+}

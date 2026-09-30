@@ -1,0 +1,667 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider          = "mysql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+enum AccountStatus {
+  ACTIVE
+  INACTIVE
+  LOCKED
+}
+
+enum WorkspaceStatus {
+  DRAFT
+  FILE_PREPARATION
+  INSTRUMENT_REVIEW
+  INSTRUMENT_APPROVAL
+  PUBLISHED
+  SELF_ASSESSMENT
+  DESK_REVIEW
+  AUDIT
+  FIELDWORK
+  FIELD_AUDIT
+  REPORTING
+  REPORT_REVIEW
+  FOLLOW_UP
+  CLOSED
+  ARCHIVED
+  CANCELLED
+}
+
+enum ReviewStatus {
+  GENERATED
+  DRAFT
+  AUDITOR_REVIEW
+  PENDING_P4MP
+  PENDING_VERIFICATION
+  APPROVED
+  RETURNED
+  REJECTED
+  PUBLISHED
+  SUPERSEDED
+}
+
+enum QuestionDimension {
+  STANDARD_ACHIEVEMENT
+  PROCESS_CONFORMITY
+}
+
+enum StandardAchievementResult {
+  MELAMPAUI
+  TERCAPAI
+  TIDAK_TERCAPAI
+  BELUM_DIUKUR
+}
+
+enum ProcessAuditResult {
+  C
+  OFI
+  OBS
+  KTS_MINOR
+  KTS_MAYOR
+  GP
+  NA
+}
+
+enum InstrumentDecision {
+  APPROVE
+  RETURN
+  REJECT
+}
+
+enum WorkpaperDocumentStatus {
+  DRAFT
+  SUBMITTED
+  RETURNED
+  APPROVED
+  LOCKED
+}
+
+enum FindingType {
+  OFI
+  OBS
+  KTS_MINOR
+  KTS_MAYOR
+  NC_MINOR
+  NC_MAJOR
+}
+
+enum FindingStatus {
+  DRAFT
+  REVIEW
+  OPEN
+  CAPA_REVIEW
+  IMPLEMENTATION
+  VERIFICATION
+  CLOSED
+  VOID
+}
+
+enum ActionStatus {
+  DRAFT
+  SUBMITTED
+  RETURNED
+  APPROVED
+  IN_PROGRESS
+  READY_VERIFY
+  EFFECTIVE
+  NOT_EFFECTIVE
+}
+
+enum VerificationStatus {
+  EFFECTIVE
+  EFFECTIVE_WITH_MONITORING
+  NOT_EFFECTIVE
+}
+
+enum EvidenceType {
+  POLICY
+  SOP
+  RECORD
+  REPORT
+  LOG
+  PHOTO
+  MINUTES
+  CONTRACT
+  CERTIFICATE
+  LINK
+  OTHER
+}
+
+enum EvidenceReviewStatus {
+  PENDING
+  VALID
+  INVALID
+  CLARIFICATION
+}
+
+enum WorkpaperStatus {
+  C
+  OFI
+  OBS
+  KTS_MINOR
+  KTS_MAYOR
+  GP
+  NC_MINOR
+  NC_MAJOR
+  NA
+}
+
+enum NotificationEvent {
+  AUDIT_WORKSPACE_CREATED
+  INSTRUMENT_REVIEW_REQUESTED
+  INSTRUMENT_CHANGED
+  INSTRUMENT_APPROVAL_REQUESTED
+  INSTRUMENT_APPROVED
+  INSTRUMENT_RETURNED
+  INSTRUMENT_PUBLISHED
+  SELF_ASSESSMENT_OPENED
+  SELF_ASSESSMENT_SUBMITTED
+  SELF_ASSESSMENT_APPROVED
+  SELF_ASSESSMENT_RETURNED
+  WORKPAPER_SUBMITTED
+  WORKPAPER_RETURNED
+  WORKPAPER_APPROVED
+  FINDING_OPENED
+  CORRECTIVE_ACTION_SUBMITTED
+  VERIFICATION_REQUESTED
+  FINDING_CLOSED
+  ACTION_RETURNED
+  REPORT_APPROVED
+  AUDIT_CLOSED
+}
+
+model User {
+  id                  String         @id @default(cuid())
+  username            String         @unique
+  fullName            String
+  email               String?        @unique
+  passwordHash        String
+  status              AccountStatus  @default(ACTIVE)
+  mustChangePassword  Boolean        @default(true)
+  failedLoginAttempts Int            @default(0)
+  lockedUntil         DateTime?
+  unitId              String?
+  isUnitApprover      Boolean        @default(false)
+  unit                Unit?          @relation(fields: [unitId], references: [id])
+  roles               UserRole[]
+  sessions            Session[]
+  auditTeams          AuditTeam[]
+  evidences           Evidence[]     @relation("EvidenceUploader")
+  workpapers          Workpaper[]
+  notifications       Notification[]
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  deletedAt           DateTime?
+
+  @@index([unitId, status])
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  code        String           @unique
+  name        String
+  users       UserRole[]
+  permissions RolePermission[]
+}
+
+model Permission {
+  id    String           @id @default(cuid())
+  code  String           @unique
+  name  String
+  roles RolePermission[]
+}
+
+model UserRole {
+  userId String
+  roleId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model Session {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+
+  @@index([userId, expiresAt])
+}
+
+model Unit {
+  id           String            @id @default(cuid())
+  code         String            @unique
+  slug         String            @unique
+  name         String
+  active       Boolean           @default(true)
+  users        User[]
+  functions    UnitFunction[]
+  workspaces   AuditWorkspace[]
+  questionMaps QuestionUnitMap[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+}
+
+model UnitFunction {
+  id           String                @id @default(cuid())
+  unitId       String
+  code         String
+  description  String
+  sourceRef    String?
+  riskLevel    String?
+  active       Boolean               @default(true)
+  unit         Unit                  @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  questionMaps QuestionFunctionMap[]
+
+  @@unique([unitId, code])
+}
+
+model Standard {
+  id                  String           @id @default(cuid())
+  code                String           @unique
+  title               String
+  source              String
+  standardType        String           @default("INTERNAL")
+  regulationReference String?          @db.Text
+  description         String?          @db.Text
+  active              Boolean          @default(true)
+  questions           MasterQuestion[]
+}
+
+model IsoClause {
+  id          String           @id @default(cuid())
+  code        String           @unique
+  title       String
+  description String?          @db.Text
+  active      Boolean          @default(true)
+  questions   MasterQuestion[]
+}
+
+model MasterQuestion {
+  id                  String            @id @default(cuid())
+  code                String            @unique
+  moduleCode          String
+  dimension           QuestionDimension @default(PROCESS_CONFORMITY)
+  criterionSource     String            @default("ISO_9001")
+  question            String
+  auditObjective      String?
+  expectedEvidence    String?
+  testMethod          String?
+  regulatoryReference String?
+  regulatorySummary   String?
+  internalRequirement String?
+  businessProcess     String?
+  riskLevel           String
+  weight              Decimal           @db.Decimal(8, 2)
+  required            Boolean           @default(true)
+  active              Boolean           @default(true)
+  version             Int               @default(1)
+  standardId          String?
+  isoClauseId         String?
+  standard            Standard?         @relation(fields: [standardId], references: [id])
+  isoClause           IsoClause?        @relation(fields: [isoClauseId], references: [id])
+  unitMaps            QuestionUnitMap[]
+  functionMaps        QuestionFunctionMap[]
+  auditQuestions      AuditQuestion[]
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@index([moduleCode, active])
+  @@index([dimension, active])
+}
+
+model QuestionUnitMap {
+  questionId String
+  unitId     String
+  question   MasterQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  unit       Unit           @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@id([questionId, unitId])
+}
+
+model QuestionFunctionMap {
+  questionId String
+  functionId String
+  question   MasterQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  function   UnitFunction   @relation(fields: [functionId], references: [id], onDelete: Cascade)
+
+  @@id([questionId, functionId])
+}
+
+model AuditProgram {
+  id         String           @id @default(cuid())
+  code       String           @unique
+  name       String
+  auditYear  Int
+  startDate  DateTime
+  endDate    DateTime
+  status     String           @default("DRAFT")
+  workspaces AuditWorkspace[]
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+}
+
+model AuditWorkspace {
+  id                    String                   @id @default(cuid())
+  name                  String                   @unique
+  unitId                String
+  auditYear             Int
+  programId             String?
+  status                WorkspaceStatus          @default(DRAFT)
+  instrumentStatus      ReviewStatus             @default(GENERATED)
+  instrumentVersion     Int                      @default(1)
+  instrumentChangeCount Int                      @default(0)
+  unit                  Unit                     @relation(fields: [unitId], references: [id])
+  program               AuditProgram?            @relation(fields: [programId], references: [id])
+  team                  AuditTeam[]
+  questions             AuditQuestion[]
+  instrumentReviews     InstrumentChangeReview[]
+  evidences             Evidence[]
+  findings              Finding[]
+  actions               CorrectiveAction[]
+  notifications         Notification[]
+  activityLogs          ActivityLog[]
+  printDocuments        PrintDocument[]
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+
+  @@unique([unitId, auditYear])
+  @@index([unitId, auditYear])
+  @@index([status])
+}
+
+model AuditTeam {
+  id          String         @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        String
+  workspace   AuditWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User           @relation(fields: [userId], references: [id])
+
+  @@unique([workspaceId, userId, role])
+}
+
+model AuditQuestion {
+  id                        String                    @id @default(cuid())
+  workspaceId               String
+  masterQuestionId          String
+  dimension                 QuestionDimension
+  questionSnapshot          String
+  defaultQuestion           String
+  auditorQuestion           String?
+  publishedQuestion         String?
+  moduleCode                String
+  defaultExpectedEvidence   String?
+  auditorExpectedEvidence   String?
+  publishedExpectedEvidence String?
+  defaultTestMethod         String?
+  auditorTestMethod         String?
+  publishedTestMethod       String?
+  defaultRiskLevel          String
+  auditorRiskLevel          String?
+  publishedRiskLevel        String?
+  required                  Boolean
+  weight                    Decimal                   @db.Decimal(8, 2)
+  defaultWeight             Decimal                   @db.Decimal(8, 2)
+  auditorWeight             Decimal?                  @db.Decimal(8, 2)
+  publishedWeight           Decimal?                  @db.Decimal(8, 2)
+  sortOrder                 Int
+  changeFlag                Boolean                   @default(false)
+  changeFields              Json?
+  changeReason              String?
+  auditorNote               String?
+  verifierNote              String?
+  excluded                  Boolean                   @default(false)
+  exclusionReason           String?
+  reviewedById              String?
+  reviewedAt                DateTime?
+  approvedById              String?
+  approvedAt                DateTime?
+  reviewStatus              ReviewStatus              @default(AUDITOR_REVIEW)
+  workspace                 AuditWorkspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  masterQuestion            MasterQuestion            @relation(fields: [masterQuestionId], references: [id])
+  instrumentReviews         InstrumentChangeReview[]
+  assessment                SelfAssessment?
+  evidences                 Evidence[]
+  workpapers                Workpaper[]
+  findings                  Finding[]
+
+  @@unique([workspaceId, masterQuestionId])
+  @@index([workspaceId, reviewStatus])
+  @@index([workspaceId, changeFlag])
+}
+
+model InstrumentChangeReview {
+  id              String             @id @default(cuid())
+  workspaceId     String
+  auditQuestionId String
+  verifierUserId  String
+  decision        InstrumentDecision
+  note            String?
+  beforeValue     Json
+  proposedValue   Json
+  createdAt       DateTime           @default(now())
+  workspace       AuditWorkspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  question        AuditQuestion      @relation(fields: [auditQuestionId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, decision])
+  @@index([auditQuestionId, createdAt])
+}
+
+model SelfAssessment {
+  id                        String                     @id @default(cuid())
+  auditQuestionId           String                     @unique
+  response                  String?
+  implementationDescription String?
+  evidenceSummary           String?
+  constraintNote            String?
+  responseStatus            String                     @default("NOT_STARTED")
+  score                     Decimal?                   @db.Decimal(8, 2)
+  standardResult            StandardAchievementResult?
+  processResult             ProcessAuditResult?
+  submittedById             String?
+  submittedAt               DateTime?
+  approvedById              String?
+  approvedAt                DateTime?
+  returnNote                String?
+  question                  AuditQuestion              @relation(fields: [auditQuestionId], references: [id], onDelete: Cascade)
+  updatedAt                 DateTime                    @updatedAt
+}
+
+model Evidence {
+  id              String               @id @default(cuid())
+  code            String               @unique
+  workspaceId     String
+  auditQuestionId String?
+  evidenceType    EvidenceType
+  title           String
+  description     String?
+  fileName        String
+  mimeType        String
+  fileSizeBytes   Int
+  storageKey      String
+  checksum        String
+  confidentiality String               @default("INTERNAL")
+  reviewStatus    EvidenceReviewStatus @default(PENDING)
+  uploadedById    String
+  uploadedAt      DateTime             @default(now())
+  validatedAt     DateTime?
+  validationNote  String?
+  deletedAt       DateTime?
+  workspace       AuditWorkspace       @relation(fields: [workspaceId], references: [id])
+  auditQuestion   AuditQuestion?       @relation(fields: [auditQuestionId], references: [id])
+  uploadedBy      User                 @relation("EvidenceUploader", fields: [uploadedById], references: [id])
+
+  @@index([workspaceId, auditQuestionId])
+}
+
+model Workpaper {
+  id                String                    @id @default(cuid())
+  auditQuestionId   String
+  auditorUserId     String
+  sampleDescription String?
+  interviewee       String?
+  objectiveEvidence String?
+  auditorAnalysis   String?
+  auditStatus       WorkpaperStatus           @default(C)
+  documentStatus    WorkpaperDocumentStatus   @default(DRAFT)
+  standardResult    StandardAchievementResult?
+  processResult     ProcessAuditResult?
+  maturityScore     Int?
+  reviewNote        String?
+  submittedAt       DateTime?
+  reviewedById      String?
+  reviewedAt        DateTime?
+  lockedAt          DateTime?
+  question          AuditQuestion             @relation(fields: [auditQuestionId], references: [id], onDelete: Cascade)
+  auditor           User                      @relation(fields: [auditorUserId], references: [id])
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+
+  @@unique([auditQuestionId, auditorUserId])
+  @@index([documentStatus])
+}
+
+model Finding {
+  id                 String             @id @default(cuid())
+  code               String             @unique
+  workspaceId        String
+  auditQuestionId    String?
+  findingType        FindingType
+  criteriaRegulation String
+  criteriaIso        String
+  condition          String
+  objectiveEvidence  String
+  gapStatement       String
+  riskImpact         String
+  status             FindingStatus      @default(DRAFT)
+  ownerUserId        String?
+  dueDate            DateTime?
+  question           AuditQuestion?     @relation(fields: [auditQuestionId], references: [id])
+  workspace          AuditWorkspace     @relation(fields: [workspaceId], references: [id])
+  actions            CorrectiveAction[]
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@index([workspaceId, status])
+}
+
+model CorrectiveAction {
+  id                 String         @id @default(cuid())
+  findingId          String
+  workspaceId        String
+  correction         String
+  analysisMethod     String
+  rootCauseStatement String
+  correctiveAction   String
+  successIndicator   String
+  picUserId          String?
+  targetDate         DateTime
+  progressPercent    Int            @default(0)
+  progressNote       String?
+  status             ActionStatus   @default(DRAFT)
+  finding            Finding        @relation(fields: [findingId], references: [id])
+  workspace          AuditWorkspace @relation(fields: [workspaceId], references: [id])
+  verifications      Verification[]
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  @@index([workspaceId, status])
+}
+
+model Verification {
+  id                   String             @id @default(cuid())
+  actionId             String
+  verifierUserId       String
+  auditorUserId        String?
+  leadAuditorUserId    String?
+  verificationDate     DateTime           @default(now())
+  implementationResult String
+  effectivenessResult  String
+  status               VerificationStatus
+  nextReviewDate       DateTime?
+  decidedAt            DateTime?
+  closedAt             DateTime?
+  action               CorrectiveAction   @relation(fields: [actionId], references: [id], onDelete: Cascade)
+
+  @@index([actionId, status])
+}
+
+model Notification {
+  id              String            @id @default(cuid())
+  workspaceId     String?
+  recipientUserId String
+  event           NotificationEvent
+  title           String
+  message         String
+  entityType      String
+  entityId        String
+  readAt          DateTime?
+  createdAt       DateTime          @default(now())
+  recipient       User              @relation(fields: [recipientUserId], references: [id], onDelete: Cascade)
+  workspace       AuditWorkspace?   @relation(fields: [workspaceId], references: [id])
+
+  @@index([recipientUserId, readAt])
+}
+
+model ActivityLog {
+  id          String          @id @default(cuid())
+  userId      String?
+  username    String?
+  role        String?
+  action      String
+  entityType  String
+  entityId    String?
+  workspaceId String?
+  oldValue    Json?
+  newValue    Json?
+  ipAddress   String?
+  userAgent   String?
+  result      String
+  createdAt   DateTime        @default(now())
+  workspace   AuditWorkspace? @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId, createdAt])
+}
+
+model PrintDocument {
+  id          String         @id @default(cuid())
+  workspaceId String
+  type        String
+  fileName    String
+  version     Int
+  storageKey  String
+  status      String
+  createdAt   DateTime       @default(now())
+  workspace   AuditWorkspace @relation(fields: [workspaceId], references: [id])
+
+  @@unique([workspaceId, type, version])
+}
+
+model SystemConfig {
+  key         String   @id
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+}

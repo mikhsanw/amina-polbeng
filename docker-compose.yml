@@ -1,0 +1,43 @@
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: sami_nonak
+      MYSQL_USER: sami_app
+      MYSQL_PASSWORD: change-this-database-password
+      MYSQL_ROOT_PASSWORD: change-this-root-password
+    ports:
+      - "127.0.0.1:${MYSQL_HOST_PORT:-3307}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: { context: ., dockerfile: docker/api.Dockerfile }
+    env_file: .env
+    environment:
+      DATABASE_URL: mysql://sami_app:change-this-database-password@mysql:3306/sami_nonak
+      SHADOW_DATABASE_URL: mysql://sami_app:change-this-database-password@mysql:3306/sami_nonak_shadow
+    ports:
+      - "4000:4000"
+    depends_on:
+      mysql: { condition: service_healthy }
+    volumes:
+      - ./storage:/app/storage
+
+  web:
+    build: { context: ., dockerfile: docker/web.Dockerfile }
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:4000/api
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  mysql_data:
