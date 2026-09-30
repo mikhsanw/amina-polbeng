@@ -1,0 +1,9 @@
+RewriteEngine On
+
+# 1. Forward all /api requests to NestJS backend (port 4000)
+RewriteRule ^api/(.*)$ http://127.0.0.1:4000/api/$1 [P,L]
+RewriteRule ^api$ http://127.0.0.1:4000/api/ [P,L]
+
+# 2. Forward all other requests to Next.js frontend (port 3000)
+RewriteCond %{REQUEST_URI} !^/api
+RewriteRule ^(.*)$ http://127.0.0.1:3000/$1 [P,L]

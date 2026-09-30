@@ -1,8 +1,14 @@
-node_modules
-.next
-dist
+# Root and app node_modules (except standalone production dependencies)
+/node_modules/
+apps/api/node_modules/
+apps/web/node_modules/
+packages/shared/node_modules/
+!apps/web/.next/standalone/node_modules/
+
+# Ignore Next.js compiler cache (not needed for production)
+apps/web/.next/cache/
+
 coverage
-.env
 storage/*
 !storage/.gitkeep
 *.log
