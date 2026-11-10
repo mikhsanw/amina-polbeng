@@ -16,10 +16,14 @@ import { mkdir, unlink, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { CurrentUser, Roles } from "./auth";
 import { AmiWorkflowService } from "./ami-workflow.service";
+import { AuditScheduleService } from "./audit-schedule.service";
 
 @Controller("audit-flow")
 export class AuditExecutionController {
-  constructor(private readonly flow: AmiWorkflowService) {}
+  constructor(
+    private readonly flow: AmiWorkflowService,
+    private readonly schedule: AuditScheduleService,
+  ) {}
 
   @Patch("assessments/:id")
   @Roles("AUDITEE")
@@ -341,19 +345,61 @@ export class AuditExecutionController {
   async deleteEvidence(@Param("id") id: string, @CurrentUser() user: any) {
     const evidence = await this.flow.prisma.evidence.findUniqueOrThrow({
       where: { id },
+      include: {
+        workspace: true,
+        auditQuestion: { include: { assessment: true } },
+      },
     });
-    if (evidence.uploadedById !== user.id) {
-      throw new ForbiddenException(
-        "Bukti hanya dapat dihapus oleh pengunggah.",
-      );
+    if (evidence.workspace.unitId !== user.unitId) {
+      throw new ForbiddenException("Bukan Auditee unit target.");
     }
     if (evidence.reviewStatus === "VALID") {
       throw new BadRequestException("Bukti VALID telah dikunci.");
     }
-    const target = resolve(process.cwd(), evidence.storageKey);
-    const root = resolve(process.cwd(), "storage");
-    if (target.startsWith(root)) await unlink(target).catch(() => undefined);
+    const status = evidence.auditQuestion?.assessment?.responseStatus || "";
+    if (evidence.workspace.status === "SELF_ASSESSMENT") {
+      await this.schedule.requireOpen(evidence.workspaceId, "SELF_ASSESSMENT");
+      if (!["", "NOT_STARTED", "IN_PROGRESS"].includes(status)) {
+        throw new BadRequestException(
+          "Bukti tidak dapat dihapus setelah jawaban dikirim.",
+        );
+      }
+    } else if (evidence.workspace.status === "FIELD_AUDIT") {
+      await this.schedule.requireOpen(evidence.workspaceId, "FIELD_AUDIT");
+      if (
+        !["RETURNED", "OPEN", "IN_PROGRESS", "FIELD_PENDING"].includes(status)
+      ) {
+        throw new BadRequestException(
+          "Bukti hanya dapat dihapus pada butir yang masih dapat diperbaiki.",
+        );
+      }
+    } else {
+      throw new BadRequestException(
+        "Penghapusan bukti tidak tersedia pada tahap audit saat ini.",
+      );
+    }
+    if (evidence.evidenceType !== "LINK") {
+      const target = resolve(process.cwd(), evidence.storageKey);
+      const root = resolve(process.cwd(), "storage");
+      if (target.startsWith(root + "/")) {
+        await unlink(target).catch(() => undefined);
+      }
+    }
     await this.flow.prisma.evidence.delete({ where: { id } });
+    await this.flow.log(
+      user.id,
+      user.username,
+      "ASSESSMENT_EVIDENCE_DELETED",
+      "Evidence",
+      id,
+      evidence.workspaceId,
+      {
+        auditQuestionId: evidence.auditQuestionId,
+        code: evidence.code,
+        title: evidence.title,
+        fileName: evidence.fileName,
+      },
+    );
     return { ok: true };
   }
 

@@ -414,7 +414,7 @@ model AuditQuestion {
   publishedQuestion         String?
   moduleCode                String
   defaultExpectedEvidence   String?
-  auditorExpectedEvidence   String?
+  auditorExpectedEvidence   String?  @db.Text
   publishedExpectedEvidence String?
   defaultTestMethod         String?
   auditorTestMethod         String?
@@ -430,11 +430,11 @@ model AuditQuestion {
   sortOrder                 Int
   changeFlag                Boolean                   @default(false)
   changeFields              Json?
-  changeReason              String?
-  auditorNote               String?
-  verifierNote              String?
+  changeReason              String?  @db.Text
+  auditorNote               String?  @db.Text
+  verifierNote              String?  @db.Text
   excluded                  Boolean                   @default(false)
-  exclusionReason           String?
+  exclusionReason           String?  @db.Text
   reviewedById              String?
   reviewedAt                DateTime?
   approvedById              String?
@@ -459,7 +459,7 @@ model InstrumentChangeReview {
   auditQuestionId String
   verifierUserId  String
   decision        InstrumentDecision
-  note            String?
+  note            String?  @db.Text
   beforeValue     Json
   proposedValue   Json
   createdAt       DateTime           @default(now())
@@ -473,10 +473,10 @@ model InstrumentChangeReview {
 model SelfAssessment {
   id                        String                     @id @default(cuid())
   auditQuestionId           String                     @unique
-  response                  String?
-  implementationDescription String?
-  evidenceSummary           String?
-  constraintNote            String?
+  response                  String?  @db.Text
+  implementationDescription String?  @db.Text
+  evidenceSummary           String?  @db.Text
+  constraintNote            String?  @db.Text
   responseStatus            String                     @default("NOT_STARTED")
   score                     Decimal?                   @db.Decimal(8, 2)
   standardResult            StandardAchievementResult?
@@ -485,7 +485,7 @@ model SelfAssessment {
   submittedAt               DateTime?
   approvedById              String?
   approvedAt                DateTime?
-  returnNote                String?
+  returnNote                String?  @db.Text
   question                  AuditQuestion              @relation(fields: [auditQuestionId], references: [id], onDelete: Cascade)
   updatedAt                 DateTime                    @updatedAt
 }
@@ -497,7 +497,7 @@ model Evidence {
   auditQuestionId String?
   evidenceType    EvidenceType
   title           String
-  description     String?
+  description     String?  @db.Text
   fileName        String
   mimeType        String
   fileSizeBytes   Int
@@ -508,7 +508,7 @@ model Evidence {
   uploadedById    String
   uploadedAt      DateTime             @default(now())
   validatedAt     DateTime?
-  validationNote  String?
+  validationNote  String?  @db.Text
   deletedAt       DateTime?
   workspace       AuditWorkspace       @relation(fields: [workspaceId], references: [id])
   auditQuestion   AuditQuestion?       @relation(fields: [auditQuestionId], references: [id])
@@ -521,16 +521,16 @@ model Workpaper {
   id                String                    @id @default(cuid())
   auditQuestionId   String
   auditorUserId     String
-  sampleDescription String?
+  sampleDescription String?  @db.Text
   interviewee       String?
-  objectiveEvidence String?
-  auditorAnalysis   String?
+  objectiveEvidence String?  @db.Text
+  auditorAnalysis   String?  @db.Text
   auditStatus       WorkpaperStatus           @default(C)
   documentStatus    WorkpaperDocumentStatus   @default(DRAFT)
   standardResult    StandardAchievementResult?
   processResult     ProcessAuditResult?
   maturityScore     Int?
-  reviewNote        String?
+  reviewNote        String?  @db.Text
   submittedAt       DateTime?
   reviewedById      String?
   reviewedAt        DateTime?
@@ -550,12 +550,12 @@ model Finding {
   workspaceId        String
   auditQuestionId    String?
   findingType        FindingType
-  criteriaRegulation String
-  criteriaIso        String
-  condition          String
-  objectiveEvidence  String
-  gapStatement       String
-  riskImpact         String
+  criteriaRegulation String  @db.Text
+  criteriaIso        String  @db.Text
+  condition          String  @db.Text
+  objectiveEvidence  String  @db.Text
+  gapStatement       String  @db.Text
+  riskImpact         String  @db.Text
   status             FindingStatus      @default(DRAFT)
   ownerUserId        String?
   dueDate            DateTime?
@@ -574,13 +574,13 @@ model CorrectiveAction {
   workspaceId        String
   correction         String
   analysisMethod     String
-  rootCauseStatement String
-  correctiveAction   String
+  rootCauseStatement String  @db.Text
+  correctiveAction   String  @db.Text
   successIndicator   String
   picUserId          String?
   targetDate         DateTime
   progressPercent    Int            @default(0)
-  progressNote       String?
+  progressNote       String?  @db.Text
   status             ActionStatus   @default(DRAFT)
   finding            Finding        @relation(fields: [findingId], references: [id])
   workspace          AuditWorkspace @relation(fields: [workspaceId], references: [id])
@@ -598,8 +598,8 @@ model Verification {
   auditorUserId        String?
   leadAuditorUserId    String?
   verificationDate     DateTime           @default(now())
-  implementationResult String
-  effectivenessResult  String
+  implementationResult String  @db.Text
+  effectivenessResult  String  @db.Text
   status               VerificationStatus
   nextReviewDate       DateTime?
   decidedAt            DateTime?
@@ -615,7 +615,7 @@ model Notification {
   recipientUserId String
   event           NotificationEvent
   title           String
-  message         String
+  message         String  @db.Text
   entityType      String
   entityId        String
   readAt          DateTime?
