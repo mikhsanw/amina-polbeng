@@ -20,10 +20,13 @@ const promises_1 = require("node:fs/promises");
 const node_path_1 = require("node:path");
 const auth_1 = require("./auth");
 const ami_workflow_service_1 = require("./ami-workflow.service");
+const audit_schedule_service_1 = require("./audit-schedule.service");
 let AuditExecutionController = class AuditExecutionController {
     flow;
-    constructor(flow) {
+    schedule;
+    constructor(flow, schedule) {
         this.flow = flow;
+        this.schedule = schedule;
     }
     async editAssessment(id, body, user) {
         const assessment = await this.flow.prisma.selfAssessment.findUniqueOrThrow({
@@ -243,18 +246,47 @@ let AuditExecutionController = class AuditExecutionController {
     async deleteEvidence(id, user) {
         const evidence = await this.flow.prisma.evidence.findUniqueOrThrow({
             where: { id },
+            include: {
+                workspace: true,
+                auditQuestion: { include: { assessment: true } },
+            },
         });
-        if (evidence.uploadedById !== user.id) {
-            throw new common_1.ForbiddenException("Bukti hanya dapat dihapus oleh pengunggah.");
+        if (evidence.workspace.unitId !== user.unitId) {
+            throw new common_1.ForbiddenException("Bukan Auditee unit target.");
         }
         if (evidence.reviewStatus === "VALID") {
             throw new common_1.BadRequestException("Bukti VALID telah dikunci.");
         }
-        const target = (0, node_path_1.resolve)(process.cwd(), evidence.storageKey);
-        const root = (0, node_path_1.resolve)(process.cwd(), "storage");
-        if (target.startsWith(root))
-            await (0, promises_1.unlink)(target).catch(() => undefined);
+        const status = evidence.auditQuestion?.assessment?.responseStatus || "";
+        if (evidence.workspace.status === "SELF_ASSESSMENT") {
+            await this.schedule.requireOpen(evidence.workspaceId, "SELF_ASSESSMENT");
+            if (!["", "NOT_STARTED", "IN_PROGRESS"].includes(status)) {
+                throw new common_1.BadRequestException("Bukti tidak dapat dihapus setelah jawaban dikirim.");
+            }
+        }
+        else if (evidence.workspace.status === "FIELD_AUDIT") {
+            await this.schedule.requireOpen(evidence.workspaceId, "FIELD_AUDIT");
+            if (!["RETURNED", "OPEN", "IN_PROGRESS", "FIELD_PENDING"].includes(status)) {
+                throw new common_1.BadRequestException("Bukti hanya dapat dihapus pada butir yang masih dapat diperbaiki.");
+            }
+        }
+        else {
+            throw new common_1.BadRequestException("Penghapusan bukti tidak tersedia pada tahap audit saat ini.");
+        }
+        if (evidence.evidenceType !== "LINK") {
+            const target = (0, node_path_1.resolve)(process.cwd(), evidence.storageKey);
+            const root = (0, node_path_1.resolve)(process.cwd(), "storage");
+            if (target.startsWith(root + "/")) {
+                await (0, promises_1.unlink)(target).catch(() => undefined);
+            }
+        }
         await this.flow.prisma.evidence.delete({ where: { id } });
+        await this.flow.log(user.id, user.username, "ASSESSMENT_EVIDENCE_DELETED", "Evidence", id, evidence.workspaceId, {
+            auditQuestionId: evidence.auditQuestionId,
+            code: evidence.code,
+            title: evidence.title,
+            fileName: evidence.fileName,
+        });
         return { ok: true };
     }
     async saveWorkpaper(id, body, user) {
@@ -574,6 +606,7 @@ __decorate([
 ], AuditExecutionController.prototype, "openFinding", null);
 exports.AuditExecutionController = AuditExecutionController = __decorate([
     (0, common_1.Controller)("audit-flow"),
-    __metadata("design:paramtypes", [ami_workflow_service_1.AmiWorkflowService])
+    __metadata("design:paramtypes", [ami_workflow_service_1.AmiWorkflowService,
+        audit_schedule_service_1.AuditScheduleService])
 ], AuditExecutionController);
 //# sourceMappingURL=audit-execution.controller.js.map

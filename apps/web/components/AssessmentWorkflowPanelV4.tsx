@@ -387,6 +387,28 @@ function QuestionCard({
     );
   }
 
+  async function deleteEvidence(evidence: any) {
+    if (
+      !window.confirm(
+        `Hapus bukti "${evidence.title || evidence.fileName}"? Tindakan ini tidak dapat dibatalkan.`,
+      )
+    )
+      return;
+    const ok = await perform(
+      `/audit-flow/evidences/${evidence.id}`,
+      { method: "DELETE" },
+      "Bukti dihapus.",
+    );
+    if (ok) {
+      window.dispatchEvent(
+        new CustomEvent("sami:evidence-changed", {
+          detail: { workspaceId: workspace.id },
+        }),
+      );
+      await reload();
+    }
+  }
+
   async function reviewAssessment(decision: "ACCEPT" | "RETURN") {
     let note = assessment.returnNote || "";
     if (decision === "RETURN") {
@@ -533,6 +555,16 @@ function QuestionCard({
                 </small>
               </div>
               <EvidenceFileLinks evidence={evidence} compact />
+              {auditeeEditable && evidence.reviewStatus !== "VALID" && (
+                <button
+                  type="button"
+                  className="small danger"
+                  disabled={busy}
+                  onClick={() => deleteEvidence(evidence)}
+                >
+                  Hapus
+                </button>
+              )}
               {isAuditor && workspace.status === "DESK_REVIEW" && (
                 <div className="review-buttons">
                   <button

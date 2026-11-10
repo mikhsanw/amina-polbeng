@@ -2,8 +2,8 @@
   "/_not-found/page": "/_not-found",
   "/[section]/page": "/[section]",
   "/admin/[section]/page": "/admin/[section]",
-  "/dashboard/page": "/dashboard",
-  "/page": "/",
   "/audit-workspaces/[id]/page": "/audit-workspaces/[id]",
+  "/page": "/",
+  "/dashboard/page": "/dashboard",
   "/audit-print/[id]/page": "/audit-print/[id]"
 }
