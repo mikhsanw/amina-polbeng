@@ -1,1 +1,0 @@
-(self.webpackChunk_N_E=self.webpackChunk_N_E||[]).push([[838],{1260:(n,t,e)=>{Promise.resolve().then(e.bind(e,1473))},1473:(n,t,e)=>{"use strict";e.d(t,{PrintButton:()=>s});var i=e(4568);function s(){return(0,i.jsx)("button",{className:"print-button",onClick:()=>window.print(),children:"Cetak / Simpan PDF"})}}},n=>{n.O(0,[587,18,358],()=>n(n.s=1260)),_N_E=n.O()}]);

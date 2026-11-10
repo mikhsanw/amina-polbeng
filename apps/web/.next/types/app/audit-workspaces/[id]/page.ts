@@ -1,4 +1,4 @@
-// File: /Users/mikhsanw/Herd/amina-polbeng/repo/apps/web/app/audit-workspaces/[id]/page.tsx
+// File: /Users/mikhsanw/Herd/amina-polbeng/apps/web/app/audit-workspaces/[id]/page.tsx
 import * as entry from '../../../../../app/audit-workspaces/[id]/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 

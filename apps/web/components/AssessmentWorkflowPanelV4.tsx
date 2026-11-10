@@ -558,7 +558,7 @@ function QuestionCard({
               {auditeeEditable && evidence.reviewStatus !== "VALID" && (
                 <button
                   type="button"
-                  className="small danger"
+                  className="evidence-delete-button"
                   disabled={busy}
                   onClick={() => deleteEvidence(evidence)}
                 >

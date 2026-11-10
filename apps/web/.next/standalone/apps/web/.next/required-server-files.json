@@ -100,7 +100,7 @@
         "transform": "lodash/{{member}}"
       }
     },
-    "outputFileTracingRoot": "/Users/mikhsanw/Herd/amina-polbeng/repo",
+    "outputFileTracingRoot": "/Users/mikhsanw/Herd/amina-polbeng",
     "experimental": {
       "useSkewCookie": false,
       "cacheLife": {
@@ -290,10 +290,10 @@
     "bundlePagesRouterDependencies": false,
     "configFileName": "next.config.ts",
     "turbopack": {
-      "root": "/Users/mikhsanw/Herd/amina-polbeng/repo"
+      "root": "/Users/mikhsanw/Herd/amina-polbeng"
     }
   },
-  "appDir": "/Users/mikhsanw/Herd/amina-polbeng/repo/apps/web",
+  "appDir": "/Users/mikhsanw/Herd/amina-polbeng/apps/web",
   "relativeAppDir": "apps/web",
   "files": [
     ".next/routes-manifest.json",
