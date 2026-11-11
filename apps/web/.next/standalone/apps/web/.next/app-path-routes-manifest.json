@@ -1,9 +1,10 @@
 {
   "/_not-found/page": "/_not-found",
-  "/[section]/page": "/[section]",
+  "/icon.png/route": "/icon.png",
   "/admin/[section]/page": "/admin/[section]",
-  "/audit-print/[id]/page": "/audit-print/[id]",
-  "/page": "/",
+  "/[section]/page": "/[section]",
   "/audit-workspaces/[id]/page": "/audit-workspaces/[id]",
-  "/dashboard/page": "/dashboard"
+  "/audit-print/[id]/page": "/audit-print/[id]",
+  "/dashboard/page": "/dashboard",
+  "/page": "/"
 }

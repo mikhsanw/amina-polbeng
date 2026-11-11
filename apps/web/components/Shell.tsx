@@ -117,9 +117,13 @@ export function Shell({ children, user }: { children: React.ReactNode; user: any
         }
       >
         <div className="brand">
-          <div className="mark">SN</div>
+          <img
+            className="brand-logo"
+            src="/amina-polbeng-logo.png"
+            alt="Logo Politeknik Negeri Bengkalis"
+          />
           <div>
-            <strong>SAMI-NONAK</strong>
+            <strong>AMINA</strong>
             <small>POLBENG</small>
           </div>
         </div>

@@ -34,10 +34,12 @@ export default function Login() {
     <main className="login">
       <form className="login-card" onSubmit={submit}>
         <div className="login-brand">
-          <img src="/polbeng-logo.jpg" alt="Logo Politeknik Negeri Bengkalis" />
+          <img src="/amina-polbeng-logo.png" alt="Logo Politeknik Negeri Bengkalis" />
           <div>
-            <h1>SAMI-NONAK POLBENG</h1>
-            <div className="subtitle">Audit Mutu Internal Nonakademik</div>
+            <h1>AMINA POLBENG</h1>
+            <div className="subtitle">
+              Audit Mutu Internal Nonakademik Politeknik Negeri Bengkalis
+            </div>
           </div>
         </div>
         {error && <p className="error">{error}</p>}
@@ -69,8 +71,6 @@ export default function Login() {
             height: 82px;
             flex: 0 0 82px;
             object-fit: contain;
-            border-radius: 12px;
-            background: #fff;
           }
           .login-brand h1 {
             margin: 0;

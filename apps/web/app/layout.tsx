@@ -9,8 +9,8 @@ import "./institutional-recap.css";
 import { ReportDeleteActionEnhancer } from "../components/ReportDeleteActionEnhancer";
 
 export const metadata = {
-  title: "SAMI-NONAK POLBENG",
-  description: "Sistem Audit Mutu Internal Nonakademik",
+  title: "AMINA POLBENG",
+  description: "Audit Mutu Internal Nonakademik Politeknik Negeri Bengkalis",
 };
 
 export default function Layout({ children }: { children: React.ReactNode }) {

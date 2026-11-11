@@ -48,7 +48,7 @@ export default async function Page({
       <header className="print-head">
         <img
           className="print-logo-image"
-          src="/polbeng-logo.jpg"
+          src="/amina-polbeng-logo.png"
           alt="Logo Politeknik Negeri Bengkalis"
         />
         <div>
@@ -182,7 +182,7 @@ export default async function Page({
 
       <footer>
         Dicetak oleh {user.fullName} pada {new Date().toLocaleString("id-ID")} ·
-        SAMI-NONAK POLBENG
+        AMINA POLBENG
       </footer>
 
       <style>{`
