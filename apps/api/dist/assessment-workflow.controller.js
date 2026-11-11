@@ -21,6 +21,7 @@ const node_path_1 = require("node:path");
 const auth_1 = require("./auth");
 const ami_workflow_service_1 = require("./ami-workflow.service");
 const audit_schedule_service_1 = require("./audit-schedule.service");
+const evidence_code_1 = require("./evidence-code");
 const STANDARD_RESULTS = [
     "MELAMPAUI",
     "TERCAPAI",
@@ -474,10 +475,9 @@ let AssessmentWorkflowController = class AssessmentWorkflowController {
         await (0, promises_1.mkdir)(directory, { recursive: true });
         const safeName = `${Date.now()}-${String(file.originalname).replace(/[^\w.-]/g, "_")}`;
         await (0, promises_1.writeFile)((0, node_path_1.join)(directory, safeName), file.buffer);
-        const count = await this.flow.prisma.evidence.count();
-        const evidence = await this.flow.prisma.evidence.create({
+        const evidence = await (0, evidence_code_1.withEvidenceCode)(this.flow.prisma, workspace.auditYear, (code) => this.flow.prisma.evidence.create({
             data: {
-                code: `EVD-${workspace.auditYear}-${String(count + 1).padStart(6, "0")}`,
+                code,
                 workspaceId: id,
                 auditQuestionId: body.auditQuestionId || null,
                 evidenceType: body.evidenceType || "OTHER",
@@ -491,7 +491,7 @@ let AssessmentWorkflowController = class AssessmentWorkflowController {
                 uploadedById: user.id,
                 confidentiality: body.confidentiality || "INTERNAL",
             },
-        });
+        }));
         await this.flow.log(user.id, user.username, "ASSESSMENT_EVIDENCE_UPLOADED", "Evidence", evidence.id, id, { auditQuestionId: body.auditQuestionId || null, fileName: file.originalname });
         return evidence;
     }

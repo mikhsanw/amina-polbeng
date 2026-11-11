@@ -8,40 +8,40 @@ export declare class AuditeeAssessmentController {
         workspace: {
             unit: {
                 id: string;
-                createdAt: Date;
-                name: string;
-                updatedAt: Date;
                 code: string;
+                name: string;
+                createdAt: Date;
+                updatedAt: Date;
                 slug: string;
                 active: boolean;
             };
             program: {
                 id: string;
-                createdAt: Date;
-                name: string;
-                status: string;
-                updatedAt: Date;
                 code: string;
+                name: string;
                 auditYear: number;
+                status: string;
+                createdAt: Date;
+                updatedAt: Date;
                 startDate: Date;
                 endDate: Date;
             } | null;
             team: ({
                 user: {
-                    unit: {
-                        name: string;
-                        code: string;
-                    } | null;
                     id: string;
+                    unitId: string | null;
+                    unit: {
+                        code: string;
+                        name: string;
+                    } | null;
                     username: string;
                     fullName: string;
-                    unitId: string | null;
                     isUnitApprover: boolean;
                     roles: ({
                         role: {
                             id: string;
-                            name: string;
                             code: string;
+                            name: string;
                         };
                     } & {
                         userId: string;
@@ -49,59 +49,100 @@ export declare class AuditeeAssessmentController {
                     })[];
                 };
             } & {
-                role: string;
                 id: string;
-                userId: string;
                 workspaceId: string;
+                role: string;
+                userId: string;
             })[];
             _count: {
-                evidences: number;
                 questions: number;
+                evidences: number;
                 findings: number;
                 actions: number;
             };
         } & {
             id: string;
-            createdAt: Date;
             name: string;
-            status: import(".prisma/client").$Enums.WorkspaceStatus;
             unitId: string;
-            updatedAt: Date;
             auditYear: number;
             programId: string | null;
+            status: import(".prisma/client").$Enums.WorkspaceStatus;
             instrumentStatus: import(".prisma/client").$Enums.ReviewStatus;
             instrumentVersion: number;
             instrumentChangeCount: number;
+            createdAt: Date;
+            updatedAt: Date;
         };
         questions: ({
+            evidences: {
+                id: string;
+                code: string;
+                workspaceId: string;
+                auditQuestionId: string | null;
+                evidenceType: import(".prisma/client").$Enums.EvidenceType;
+                title: string;
+                description: string | null;
+                fileName: string;
+                mimeType: string;
+                fileSizeBytes: number;
+                storageKey: string;
+                checksum: string;
+                confidentiality: string;
+                reviewStatus: import(".prisma/client").$Enums.EvidenceReviewStatus;
+                uploadedById: string;
+                uploadedAt: Date;
+                validatedAt: Date | null;
+                validationNote: string | null;
+                deletedAt: Date | null;
+            }[];
+            findings: {
+                id: string;
+                code: string;
+                workspaceId: string;
+                auditQuestionId: string | null;
+                status: import(".prisma/client").$Enums.FindingStatus;
+                createdAt: Date;
+                updatedAt: Date;
+                findingType: import(".prisma/client").$Enums.FindingType;
+                criteriaRegulation: string;
+                criteriaIso: string;
+                condition: string;
+                objectiveEvidence: string;
+                gapStatement: string;
+                riskImpact: string;
+                ownerUserId: string | null;
+                dueDate: Date | null;
+            }[];
             masterQuestion: {
                 standard: {
                     id: string;
                     code: string;
-                    active: boolean;
                     title: string;
+                    description: string | null;
+                    active: boolean;
                     source: string;
                     standardType: string;
                     regulationReference: string | null;
-                    description: string | null;
                 } | null;
                 isoClause: {
                     id: string;
                     code: string;
-                    active: boolean;
                     title: string;
                     description: string | null;
+                    active: boolean;
                 } | null;
             } & {
                 id: string;
+                code: string;
                 createdAt: Date;
                 updatedAt: Date;
-                code: string;
                 active: boolean;
-                moduleCode: string;
                 dimension: import(".prisma/client").$Enums.QuestionDimension;
-                criterionSource: string;
+                moduleCode: string;
+                required: boolean;
+                weight: import("@prisma/client/runtime/library").Decimal;
                 question: string;
+                criterionSource: string;
                 auditObjective: string | null;
                 expectedEvidence: string | null;
                 testMethod: string | null;
@@ -110,57 +151,16 @@ export declare class AuditeeAssessmentController {
                 internalRequirement: string | null;
                 businessProcess: string | null;
                 riskLevel: string;
-                weight: import("@prisma/client/runtime/library").Decimal;
-                required: boolean;
                 version: number;
                 standardId: string | null;
                 isoClauseId: string | null;
             };
-            evidences: {
-                id: string;
-                deletedAt: Date | null;
-                code: string;
-                workspaceId: string;
-                reviewStatus: import(".prisma/client").$Enums.EvidenceReviewStatus;
-                auditQuestionId: string | null;
-                title: string;
-                description: string | null;
-                evidenceType: import(".prisma/client").$Enums.EvidenceType;
-                fileName: string;
-                mimeType: string;
-                fileSizeBytes: number;
-                storageKey: string;
-                checksum: string;
-                confidentiality: string;
-                uploadedById: string;
-                uploadedAt: Date;
-                validatedAt: Date | null;
-                validationNote: string | null;
-            }[];
-            findings: {
-                id: string;
-                createdAt: Date;
-                status: import(".prisma/client").$Enums.FindingStatus;
-                updatedAt: Date;
-                code: string;
-                workspaceId: string;
-                auditQuestionId: string | null;
-                objectiveEvidence: string;
-                findingType: import(".prisma/client").$Enums.FindingType;
-                criteriaRegulation: string;
-                criteriaIso: string;
-                condition: string;
-                gapStatement: string;
-                riskImpact: string;
-                ownerUserId: string | null;
-                dueDate: Date | null;
-            }[];
             assessment: {
                 id: string;
+                auditQuestionId: string;
                 updatedAt: Date;
                 approvedById: string | null;
                 approvedAt: Date | null;
-                auditQuestionId: string;
                 response: string | null;
                 implementationDescription: string | null;
                 evidenceSummary: string | null;
@@ -176,15 +176,14 @@ export declare class AuditeeAssessmentController {
         } & {
             id: string;
             workspaceId: string;
-            moduleCode: string;
-            dimension: import(".prisma/client").$Enums.QuestionDimension;
-            weight: import("@prisma/client/runtime/library").Decimal;
-            required: boolean;
+            reviewStatus: import(".prisma/client").$Enums.ReviewStatus;
             masterQuestionId: string;
+            dimension: import(".prisma/client").$Enums.QuestionDimension;
             questionSnapshot: string;
             defaultQuestion: string;
             auditorQuestion: string | null;
             publishedQuestion: string | null;
+            moduleCode: string;
             defaultExpectedEvidence: string | null;
             auditorExpectedEvidence: string | null;
             publishedExpectedEvidence: string | null;
@@ -194,6 +193,8 @@ export declare class AuditeeAssessmentController {
             defaultRiskLevel: string;
             auditorRiskLevel: string | null;
             publishedRiskLevel: string | null;
+            required: boolean;
+            weight: import("@prisma/client/runtime/library").Decimal;
             defaultWeight: import("@prisma/client/runtime/library").Decimal;
             auditorWeight: import("@prisma/client/runtime/library").Decimal | null;
             publishedWeight: import("@prisma/client/runtime/library").Decimal | null;
@@ -209,7 +210,6 @@ export declare class AuditeeAssessmentController {
             reviewedAt: Date | null;
             approvedById: string | null;
             approvedAt: Date | null;
-            reviewStatus: import(".prisma/client").$Enums.ReviewStatus;
         })[];
         evidences: ({
             auditQuestion: {
@@ -222,33 +222,34 @@ export declare class AuditeeAssessmentController {
             };
         } & {
             id: string;
-            deletedAt: Date | null;
             code: string;
             workspaceId: string;
-            reviewStatus: import(".prisma/client").$Enums.EvidenceReviewStatus;
             auditQuestionId: string | null;
+            evidenceType: import(".prisma/client").$Enums.EvidenceType;
             title: string;
             description: string | null;
-            evidenceType: import(".prisma/client").$Enums.EvidenceType;
             fileName: string;
             mimeType: string;
             fileSizeBytes: number;
             storageKey: string;
             checksum: string;
             confidentiality: string;
+            reviewStatus: import(".prisma/client").$Enums.EvidenceReviewStatus;
             uploadedById: string;
             uploadedAt: Date;
             validatedAt: Date | null;
             validationNote: string | null;
+            deletedAt: Date | null;
         })[];
         schedule: {
             id: string;
-            createdAt: Date;
-            status: string;
-            unitId: string;
-            updatedAt: Date;
             workspaceId: string | null;
+            unitId: string;
             programId: string;
+            status: string;
+            createdAt: Date;
+            updatedAt: Date;
+            included: boolean;
             instrumentReviewStart: Date | null;
             instrumentReviewEnd: Date | null;
             instrumentVerificationStart: Date | null;
@@ -263,15 +264,14 @@ export declare class AuditeeAssessmentController {
             reportingEnd: Date | null;
             followUpStart: Date | null;
             followUpEnd: Date | null;
-            included: boolean;
         } | null;
     }>;
     saveAnswer(id: string, body: any, user: any): Promise<{
         id: string;
+        auditQuestionId: string;
         updatedAt: Date;
         approvedById: string | null;
         approvedAt: Date | null;
-        auditQuestionId: string;
         response: string | null;
         implementationDescription: string | null;
         evidenceSummary: string | null;
@@ -286,23 +286,23 @@ export declare class AuditeeAssessmentController {
     }>;
     upload(id: string, file: any, body: any, user: any): Promise<{
         id: string;
-        deletedAt: Date | null;
         code: string;
         workspaceId: string;
-        reviewStatus: import(".prisma/client").$Enums.EvidenceReviewStatus;
         auditQuestionId: string | null;
+        evidenceType: import(".prisma/client").$Enums.EvidenceType;
         title: string;
         description: string | null;
-        evidenceType: import(".prisma/client").$Enums.EvidenceType;
         fileName: string;
         mimeType: string;
         fileSizeBytes: number;
         storageKey: string;
         checksum: string;
         confidentiality: string;
+        reviewStatus: import(".prisma/client").$Enums.EvidenceReviewStatus;
         uploadedById: string;
         uploadedAt: Date;
         validatedAt: Date | null;
         validationNote: string | null;
+        deletedAt: Date | null;
     }>;
 }

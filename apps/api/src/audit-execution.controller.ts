@@ -17,6 +17,7 @@ import { join, resolve } from "node:path";
 import { CurrentUser, Roles } from "./auth";
 import { AmiWorkflowService } from "./ami-workflow.service";
 import { AuditScheduleService } from "./audit-schedule.service";
+import { withEvidenceCode } from "./evidence-code";
 
 @Controller("audit-flow")
 export class AuditExecutionController {
@@ -247,31 +248,32 @@ export class AuditExecutionController {
     await mkdir(directory, { recursive: true });
     const safeName = `${Date.now()}-${originalName.replace(/[^\w.-]/g, "_")}`;
     await writeFile(join(directory, safeName), bytes);
-    const count = await this.flow.prisma.evidence.count();
-    return this.flow.prisma.evidence.create({
-      data: {
-        code: `EVD-${workspace.auditYear}-${String(count + 1).padStart(6, "0")}`,
-        workspaceId,
-        auditQuestionId: metadata.auditQuestionId || null,
-        evidenceType: metadata.evidenceType || "OTHER",
-        title: metadata.title || originalName,
-        description: metadata.description || null,
-        fileName: originalName,
-        mimeType: mimeType || "application/octet-stream",
-        fileSizeBytes: bytes.length,
-        storageKey: join(
-          "storage",
-          "audits",
-          String(workspace.auditYear),
-          workspace.name,
-          "evidence",
-          safeName,
-        ),
-        checksum: createHash("sha256").update(bytes).digest("hex"),
-        uploadedById: user.id,
-        confidentiality: metadata.confidentiality || "INTERNAL",
-      },
-    });
+    return withEvidenceCode(this.flow.prisma, workspace.auditYear, (code) =>
+      this.flow.prisma.evidence.create({
+        data: {
+          code,
+          workspaceId,
+          auditQuestionId: metadata.auditQuestionId || null,
+          evidenceType: metadata.evidenceType || "OTHER",
+          title: metadata.title || originalName,
+          description: metadata.description || null,
+          fileName: originalName,
+          mimeType: mimeType || "application/octet-stream",
+          fileSizeBytes: bytes.length,
+          storageKey: join(
+            "storage",
+            "audits",
+            String(workspace.auditYear),
+            workspace.name,
+            "evidence",
+            safeName,
+          ),
+          checksum: createHash("sha256").update(bytes).digest("hex"),
+          uploadedById: user.id,
+          confidentiality: metadata.confidentiality || "INTERNAL",
+        },
+      }),
+    );
   }
 
   @Post("workspaces/:id/evidences/upload")

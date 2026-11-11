@@ -21,6 +21,7 @@ const node_path_1 = require("node:path");
 const auth_1 = require("./auth");
 const ami_workflow_service_1 = require("./ami-workflow.service");
 const audit_schedule_service_1 = require("./audit-schedule.service");
+const evidence_code_1 = require("./evidence-code");
 let AuditExecutionController = class AuditExecutionController {
     flow;
     schedule;
@@ -197,10 +198,9 @@ let AuditExecutionController = class AuditExecutionController {
         await (0, promises_1.mkdir)(directory, { recursive: true });
         const safeName = `${Date.now()}-${originalName.replace(/[^\w.-]/g, "_")}`;
         await (0, promises_1.writeFile)((0, node_path_1.join)(directory, safeName), bytes);
-        const count = await this.flow.prisma.evidence.count();
-        return this.flow.prisma.evidence.create({
+        return (0, evidence_code_1.withEvidenceCode)(this.flow.prisma, workspace.auditYear, (code) => this.flow.prisma.evidence.create({
             data: {
-                code: `EVD-${workspace.auditYear}-${String(count + 1).padStart(6, "0")}`,
+                code,
                 workspaceId,
                 auditQuestionId: metadata.auditQuestionId || null,
                 evidenceType: metadata.evidenceType || "OTHER",
@@ -214,7 +214,7 @@ let AuditExecutionController = class AuditExecutionController {
                 uploadedById: user.id,
                 confidentiality: metadata.confidentiality || "INTERNAL",
             },
-        });
+        }));
     }
     uploadEvidence(id, file, body, user) {
         if (!file)

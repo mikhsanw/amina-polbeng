@@ -16,6 +16,7 @@ import { join } from "node:path";
 import { CurrentUser, Roles } from "./auth";
 import { AmiWorkflowService } from "./ami-workflow.service";
 import { AuditScheduleService } from "./audit-schedule.service";
+import { withEvidenceCode } from "./evidence-code";
 
 const STANDARD_RESULTS = [
   "MELAMPAUI",
@@ -651,31 +652,32 @@ export class AssessmentWorkflowController {
     await mkdir(directory, { recursive: true });
     const safeName = `${Date.now()}-${String(file.originalname).replace(/[^\w.-]/g, "_")}`;
     await writeFile(join(directory, safeName), file.buffer);
-    const count = await this.flow.prisma.evidence.count();
-    const evidence = await this.flow.prisma.evidence.create({
-      data: {
-        code: `EVD-${workspace.auditYear}-${String(count + 1).padStart(6, "0")}`,
-        workspaceId: id,
-        auditQuestionId: body.auditQuestionId || null,
-        evidenceType: body.evidenceType || "OTHER",
-        title: body.title || file.originalname,
-        description: body.description || null,
-        fileName: file.originalname,
-        mimeType: file.mimetype || "application/octet-stream",
-        fileSizeBytes: file.buffer.length,
-        storageKey: join(
-          "storage",
-          "audits",
-          String(workspace.auditYear),
-          workspace.name,
-          "evidence",
-          safeName,
-        ),
-        checksum: createHash("sha256").update(file.buffer).digest("hex"),
-        uploadedById: user.id,
-        confidentiality: body.confidentiality || "INTERNAL",
-      },
-    });
+    const evidence = await withEvidenceCode(this.flow.prisma, workspace.auditYear, (code) =>
+      this.flow.prisma.evidence.create({
+        data: {
+          code,
+          workspaceId: id,
+          auditQuestionId: body.auditQuestionId || null,
+          evidenceType: body.evidenceType || "OTHER",
+          title: body.title || file.originalname,
+          description: body.description || null,
+          fileName: file.originalname,
+          mimeType: file.mimetype || "application/octet-stream",
+          fileSizeBytes: file.buffer.length,
+          storageKey: join(
+            "storage",
+            "audits",
+            String(workspace.auditYear),
+            workspace.name,
+            "evidence",
+            safeName,
+          ),
+          checksum: createHash("sha256").update(file.buffer).digest("hex"),
+          uploadedById: user.id,
+          confidentiality: body.confidentiality || "INTERNAL",
+        },
+      }),
+    );
     await this.flow.log(
       user.id,
       user.username,

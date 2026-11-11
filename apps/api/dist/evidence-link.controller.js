@@ -18,6 +18,7 @@ const node_crypto_1 = require("node:crypto");
 const auth_1 = require("./auth");
 const ami_workflow_service_1 = require("./ami-workflow.service");
 const audit_schedule_service_1 = require("./audit-schedule.service");
+const evidence_code_1 = require("./evidence-code");
 function googleDriveUrl(value) {
     let url;
     try {
@@ -75,10 +76,9 @@ let EvidenceLinkController = class EvidenceLinkController {
         else {
             throw new common_1.BadRequestException("Penambahan link bukti tidak tersedia pada tahap audit saat ini.");
         }
-        const count = await this.flow.prisma.evidence.count();
-        const evidence = await this.flow.prisma.evidence.create({
+        const evidence = await (0, evidence_code_1.withEvidenceCode)(this.flow.prisma, workspace.auditYear, (code) => this.flow.prisma.evidence.create({
             data: {
-                code: `EVD-${workspace.auditYear}-${String(count + 1).padStart(6, "0")}`,
+                code,
                 workspaceId: id,
                 auditQuestionId,
                 evidenceType: "LINK",
@@ -92,7 +92,7 @@ let EvidenceLinkController = class EvidenceLinkController {
                 uploadedById: user.id,
                 confidentiality: body.confidentiality || "INTERNAL",
             },
-        });
+        }));
         await this.flow.log(user.id, user.username, "ASSESSMENT_EVIDENCE_LINK_ADDED", "Evidence", evidence.id, id, { auditQuestionId, title, url });
         return evidence;
     }

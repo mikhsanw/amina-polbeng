@@ -6,23 +6,23 @@ export declare class EvidenceLinkController {
     constructor(flow: AmiWorkflowService, schedule: AuditScheduleService);
     createLink(id: string, body: any, user: any): Promise<{
         id: string;
-        deletedAt: Date | null;
         code: string;
         workspaceId: string;
-        reviewStatus: import(".prisma/client").$Enums.EvidenceReviewStatus;
         auditQuestionId: string | null;
+        evidenceType: import(".prisma/client").$Enums.EvidenceType;
         title: string;
         description: string | null;
-        evidenceType: import(".prisma/client").$Enums.EvidenceType;
         fileName: string;
         mimeType: string;
         fileSizeBytes: number;
         storageKey: string;
         checksum: string;
         confidentiality: string;
+        reviewStatus: import(".prisma/client").$Enums.EvidenceReviewStatus;
         uploadedById: string;
         uploadedAt: Date;
         validatedAt: Date | null;
         validationNote: string | null;
+        deletedAt: Date | null;
     }>;
 }
