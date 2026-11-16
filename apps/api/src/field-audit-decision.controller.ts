@@ -2,6 +2,7 @@ import { BadRequestException, Body, Controller, Param, Post } from "@nestjs/comm
 import { CurrentUser, Roles } from "./auth";
 import { AmiWorkflowService } from "./ami-workflow.service";
 import { AuditScheduleService } from "./audit-schedule.service";
+import { withFindingCode } from "./finding-code";
 
 const STANDARD_RESULTS = new Set([
   "MELAMPAUI",
@@ -182,11 +183,6 @@ export class FieldAuditDecisionController {
     const existingFinding = assessment.question.findings.find(
       (item) => item.status === "OPEN",
     );
-    const findingCount = requiresFinding
-      ? await this.flow.prisma.finding.count({
-          where: { workspaceId: workspace.id },
-        })
-      : 0;
 
     const workpaperAuditStatus = isIso
       ? processResult
@@ -194,99 +190,101 @@ export class FieldAuditDecisionController {
         ? findingType
         : "C";
 
-    await this.flow.prisma.$transaction(async (transaction) => {
-      await transaction.selfAssessment.update({
-        where: { id },
-        data: {
-          responseStatus: requiresFinding ? "OPEN" : "APPROVED",
-          standardResult,
-          processResult,
-          approvedById: user.id,
-          approvedAt: new Date(),
-          returnNote: note,
-          score: null,
-        },
-      });
+    await withFindingCode(this.flow.prisma, workspace.auditYear, (findingCode) =>
+      this.flow.prisma.$transaction(async (transaction) => {
+        await transaction.selfAssessment.update({
+          where: { id },
+          data: {
+            responseStatus: requiresFinding ? "OPEN" : "APPROVED",
+            standardResult,
+            processResult,
+            approvedById: user.id,
+            approvedAt: new Date(),
+            returnNote: note,
+            score: null,
+          },
+        });
 
-      await transaction.workpaper.upsert({
-        where: {
-          auditQuestionId_auditorUserId: {
+        await transaction.workpaper.upsert({
+          where: {
+            auditQuestionId_auditorUserId: {
+              auditQuestionId: assessment.auditQuestionId,
+              auditorUserId: user.id,
+            },
+          },
+          create: {
             auditQuestionId: assessment.auditQuestionId,
             auditorUserId: user.id,
+            sampleDescription: sampleDescription || null,
+            interviewee: interviewee || null,
+            objectiveEvidence,
+            auditorAnalysis,
+            auditStatus: workpaperAuditStatus,
+            standardResult,
+            processResult,
+            documentStatus: "DRAFT",
           },
-        },
-        create: {
-          auditQuestionId: assessment.auditQuestionId,
-          auditorUserId: user.id,
-          sampleDescription: sampleDescription || null,
-          interviewee: interviewee || null,
-          objectiveEvidence,
-          auditorAnalysis,
-          auditStatus: workpaperAuditStatus,
-          standardResult,
-          processResult,
-          documentStatus: "DRAFT",
-        },
-        update: {
-          sampleDescription: sampleDescription || null,
-          interviewee: interviewee || null,
-          objectiveEvidence,
-          auditorAnalysis,
-          auditStatus: workpaperAuditStatus,
-          standardResult,
-          processResult,
-          documentStatus: "DRAFT",
-        },
-      });
+          update: {
+            sampleDescription: sampleDescription || null,
+            interviewee: interviewee || null,
+            objectiveEvidence,
+            auditorAnalysis,
+            auditStatus: workpaperAuditStatus,
+            standardResult,
+            processResult,
+            documentStatus: "DRAFT",
+          },
+        });
 
-      if (requiresFinding) {
-        if (existingFinding) {
-          await transaction.finding.update({
-            where: { id: existingFinding.id },
-            data: findingData,
-          });
+        if (requiresFinding) {
+          if (existingFinding) {
+            await transaction.finding.update({
+              where: { id: existingFinding.id },
+              data: findingData,
+            });
+          } else {
+            await transaction.finding.create({
+              data: {
+                ...findingData,
+                code: findingCode,
+                workspaceId: workspace.id,
+                auditQuestionId: assessment.auditQuestionId,
+              },
+            });
+          }
         } else {
-          await transaction.finding.create({
-            data: {
-              ...findingData,
-              code: `FND-${workspace.auditYear}-${String(findingCount + 1).padStart(5, "0")}`,
+          await transaction.finding.updateMany({
+            where: {
               workspaceId: workspace.id,
               auditQuestionId: assessment.auditQuestionId,
+              status: "OPEN",
             },
+            data: { status: "CLOSED" },
           });
         }
-      } else {
-        await transaction.finding.updateMany({
-          where: {
-            workspaceId: workspace.id,
-            auditQuestionId: assessment.auditQuestionId,
-            status: "OPEN",
-          },
-          data: { status: "CLOSED" },
-        });
-      }
 
-      await transaction.activityLog.create({
-        data: {
-          userId: user.id,
-          username: user.username,
-          action: requiresFinding
-            ? "FIELD_ASSESSMENT_FINDING_OPENED"
-            : "FIELD_ASSESSMENT_ITEM_COMPLETED",
-          entityType: "SelfAssessment",
-          entityId: id,
-          workspaceId: workspace.id,
-          result: "SUCCESS",
-          newValue: {
-            sourceType: isIso ? "ISO" : "SPMI",
-            category: result,
-            requiresFinding,
-            findingType,
-            dueDate: dueDate?.toISOString() || null,
+        await transaction.activityLog.create({
+          data: {
+            userId: user.id,
+            username: user.username,
+            action: requiresFinding
+              ? "FIELD_ASSESSMENT_FINDING_OPENED"
+              : "FIELD_ASSESSMENT_ITEM_COMPLETED",
+            entityType: "SelfAssessment",
+            entityId: id,
+            workspaceId: workspace.id,
+            result: "SUCCESS",
+            newValue: {
+              sourceType: isIso ? "ISO" : "SPMI",
+              category: result,
+              requiresFinding,
+              findingType,
+              dueDate: dueDate?.toISOString() || null,
+            },
           },
-        },
-      });
-    });
+        });
+      }),
+    );
 
     return {
       ok: true,

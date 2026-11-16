@@ -56,6 +56,9 @@ export declare class AuditExecutionController {
         code: string;
         workspaceId: string;
         auditQuestionId: string | null;
+        deletedAt: Date | null;
+        reviewStatus: import(".prisma/client").$Enums.EvidenceReviewStatus;
+        uploadedAt: Date;
         evidenceType: import(".prisma/client").$Enums.EvidenceType;
         title: string;
         description: string | null;
@@ -65,18 +68,18 @@ export declare class AuditExecutionController {
         storageKey: string;
         checksum: string;
         confidentiality: string;
-        reviewStatus: import(".prisma/client").$Enums.EvidenceReviewStatus;
         uploadedById: string;
-        uploadedAt: Date;
         validatedAt: Date | null;
         validationNote: string | null;
-        deletedAt: Date | null;
     }>;
     uploadEvidenceLegacy(id: string, body: any, user: any): Promise<{
         id: string;
         code: string;
         workspaceId: string;
         auditQuestionId: string | null;
+        deletedAt: Date | null;
+        reviewStatus: import(".prisma/client").$Enums.EvidenceReviewStatus;
+        uploadedAt: Date;
         evidenceType: import(".prisma/client").$Enums.EvidenceType;
         title: string;
         description: string | null;
@@ -86,18 +89,18 @@ export declare class AuditExecutionController {
         storageKey: string;
         checksum: string;
         confidentiality: string;
-        reviewStatus: import(".prisma/client").$Enums.EvidenceReviewStatus;
         uploadedById: string;
-        uploadedAt: Date;
         validatedAt: Date | null;
         validationNote: string | null;
-        deletedAt: Date | null;
     }>;
     reviewEvidence(id: string, body: any, user: any): Promise<{
         id: string;
         code: string;
         workspaceId: string;
         auditQuestionId: string | null;
+        deletedAt: Date | null;
+        reviewStatus: import(".prisma/client").$Enums.EvidenceReviewStatus;
+        uploadedAt: Date;
         evidenceType: import(".prisma/client").$Enums.EvidenceType;
         title: string;
         description: string | null;
@@ -107,12 +110,9 @@ export declare class AuditExecutionController {
         storageKey: string;
         checksum: string;
         confidentiality: string;
-        reviewStatus: import(".prisma/client").$Enums.EvidenceReviewStatus;
         uploadedById: string;
-        uploadedAt: Date;
         validatedAt: Date | null;
         validationNote: string | null;
-        deletedAt: Date | null;
     }>;
     deleteEvidence(id: string, user: any): Promise<{
         ok: boolean;
@@ -120,11 +120,11 @@ export declare class AuditExecutionController {
     saveWorkpaper(id: string, body: any, user: any): Promise<{
         id: string;
         auditQuestionId: string;
+        objectiveEvidence: string | null;
         createdAt: Date;
         updatedAt: Date;
         reviewedById: string | null;
         reviewedAt: Date | null;
-        objectiveEvidence: string | null;
         standardResult: import(".prisma/client").$Enums.StandardAchievementResult | null;
         processResult: import(".prisma/client").$Enums.ProcessAuditResult | null;
         submittedAt: Date | null;
@@ -141,11 +141,11 @@ export declare class AuditExecutionController {
     submitWorkpaper(id: string, user: any): Promise<{
         id: string;
         auditQuestionId: string;
+        objectiveEvidence: string | null;
         createdAt: Date;
         updatedAt: Date;
         reviewedById: string | null;
         reviewedAt: Date | null;
-        objectiveEvidence: string | null;
         standardResult: import(".prisma/client").$Enums.StandardAchievementResult | null;
         processResult: import(".prisma/client").$Enums.ProcessAuditResult | null;
         submittedAt: Date | null;
@@ -162,11 +162,11 @@ export declare class AuditExecutionController {
     approveWorkpaper(id: string, user: any): Promise<{
         id: string;
         auditQuestionId: string;
+        objectiveEvidence: string | null;
         createdAt: Date;
         updatedAt: Date;
         reviewedById: string | null;
         reviewedAt: Date | null;
-        objectiveEvidence: string | null;
         standardResult: import(".prisma/client").$Enums.StandardAchievementResult | null;
         processResult: import(".prisma/client").$Enums.ProcessAuditResult | null;
         submittedAt: Date | null;
@@ -183,11 +183,11 @@ export declare class AuditExecutionController {
     returnWorkpaper(id: string, body: any, user: any): Promise<{
         id: string;
         auditQuestionId: string;
+        objectiveEvidence: string | null;
         createdAt: Date;
         updatedAt: Date;
         reviewedById: string | null;
         reviewedAt: Date | null;
-        objectiveEvidence: string | null;
         standardResult: import(".prisma/client").$Enums.StandardAchievementResult | null;
         processResult: import(".prisma/client").$Enums.ProcessAuditResult | null;
         submittedAt: Date | null;
@@ -206,9 +206,6 @@ export declare class AuditExecutionController {
         code: string;
         workspaceId: string;
         auditQuestionId: string | null;
-        status: import(".prisma/client").$Enums.FindingStatus;
-        createdAt: Date;
-        updatedAt: Date;
         findingType: import(".prisma/client").$Enums.FindingType;
         criteriaRegulation: string;
         criteriaIso: string;
@@ -216,17 +213,17 @@ export declare class AuditExecutionController {
         objectiveEvidence: string;
         gapStatement: string;
         riskImpact: string;
+        status: import(".prisma/client").$Enums.FindingStatus;
         ownerUserId: string | null;
         dueDate: Date | null;
+        createdAt: Date;
+        updatedAt: Date;
     }>;
     openFinding(id: string, user: any): Promise<{
         id: string;
         code: string;
         workspaceId: string;
         auditQuestionId: string | null;
-        status: import(".prisma/client").$Enums.FindingStatus;
-        createdAt: Date;
-        updatedAt: Date;
         findingType: import(".prisma/client").$Enums.FindingType;
         criteriaRegulation: string;
         criteriaIso: string;
@@ -234,7 +231,10 @@ export declare class AuditExecutionController {
         objectiveEvidence: string;
         gapStatement: string;
         riskImpact: string;
+        status: import(".prisma/client").$Enums.FindingStatus;
         ownerUserId: string | null;
         dueDate: Date | null;
+        createdAt: Date;
+        updatedAt: Date;
     }>;
 }

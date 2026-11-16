@@ -22,6 +22,7 @@ const auth_1 = require("./auth");
 const ami_workflow_service_1 = require("./ami-workflow.service");
 const audit_schedule_service_1 = require("./audit-schedule.service");
 const evidence_code_1 = require("./evidence-code");
+const finding_code_1 = require("./finding-code");
 let AuditExecutionController = class AuditExecutionController {
     flow;
     schedule;
@@ -419,24 +420,21 @@ let AuditExecutionController = class AuditExecutionController {
                 throw new common_1.BadRequestException("Temuan hanya dapat dibuat dari kertas kerja yang telah disetujui.");
             }
         }
-        const count = await this.flow.prisma.finding.count({
-            where: { workspaceId: id },
-        });
         const findingType = body.findingType === "NC_MINOR"
             ? "KTS_MINOR"
             : body.findingType === "NC_MAJOR"
                 ? "KTS_MAYOR"
                 : body.findingType;
-        return this.flow.prisma.finding.create({
+        return (0, finding_code_1.withFindingCode)(this.flow.prisma, workspace.auditYear, (code) => this.flow.prisma.finding.create({
             data: {
                 ...body,
                 findingType,
                 workspaceId: id,
                 dueDate: body.dueDate ? new Date(body.dueDate) : null,
-                code: `FND-${workspace.auditYear}-${String(count + 1).padStart(5, "0")}`,
+                code,
                 status: "DRAFT",
             },
-        });
+        }));
     }
     async openFinding(id, user) {
         const finding = await this.flow.prisma.finding.findUniqueOrThrow({

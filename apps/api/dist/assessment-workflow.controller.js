@@ -22,6 +22,7 @@ const auth_1 = require("./auth");
 const ami_workflow_service_1 = require("./ami-workflow.service");
 const audit_schedule_service_1 = require("./audit-schedule.service");
 const evidence_code_1 = require("./evidence-code");
+const finding_code_1 = require("./finding-code");
 const STANDARD_RESULTS = [
     "MELAMPAUI",
     "TERCAPAI",
@@ -360,9 +361,6 @@ let AssessmentWorkflowController = class AssessmentWorkflowController {
         if (Number.isNaN(dueDate.getTime())) {
             throw new common_1.BadRequestException("Batas waktu perbaikan wajib diisi.");
         }
-        const count = await this.flow.prisma.finding.count({
-            where: { workspaceId: workspace.id },
-        });
         const findingType = body.findingType === "NC_MINOR"
             ? "KTS_MINOR"
             : body.findingType === "NC_MAJOR"
@@ -384,7 +382,7 @@ let AssessmentWorkflowController = class AssessmentWorkflowController {
             dueDate,
             status: "OPEN",
         };
-        await this.flow.prisma.$transaction([
+        await (0, finding_code_1.withFindingCode)(this.flow.prisma, workspace.auditYear, (findingCode) => this.flow.prisma.$transaction([
             this.flow.prisma.selfAssessment.update({
                 where: { id },
                 data: {
@@ -409,12 +407,12 @@ let AssessmentWorkflowController = class AssessmentWorkflowController {
                 : this.flow.prisma.finding.create({
                     data: {
                         ...findingData,
-                        code: `FND-${workspace.auditYear}-${String(count + 1).padStart(5, "0")}`,
+                        code: findingCode,
                         workspaceId: workspace.id,
                         auditQuestionId: assessment.auditQuestionId,
                     },
                 }),
-        ]);
+        ]));
         await this.flow.log(user.id, user.username, "FIELD_ASSESSMENT_ITEM_OPENED", "SelfAssessment", id, workspace.id, { result, note, dueDate });
         return { ok: true, status: "OPEN", result, dueDate };
     }

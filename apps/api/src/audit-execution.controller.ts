@@ -18,6 +18,7 @@ import { CurrentUser, Roles } from "./auth";
 import { AmiWorkflowService } from "./ami-workflow.service";
 import { AuditScheduleService } from "./audit-schedule.service";
 import { withEvidenceCode } from "./evidence-code";
+import { withFindingCode } from "./finding-code";
 
 @Controller("audit-flow")
 export class AuditExecutionController {
@@ -567,25 +568,24 @@ export class AuditExecutionController {
         );
       }
     }
-    const count = await this.flow.prisma.finding.count({
-      where: { workspaceId: id },
-    });
     const findingType =
       body.findingType === "NC_MINOR"
         ? "KTS_MINOR"
         : body.findingType === "NC_MAJOR"
           ? "KTS_MAYOR"
           : body.findingType;
-    return this.flow.prisma.finding.create({
-      data: {
-        ...body,
-        findingType,
-        workspaceId: id,
-        dueDate: body.dueDate ? new Date(body.dueDate) : null,
-        code: `FND-${workspace.auditYear}-${String(count + 1).padStart(5, "0")}`,
-        status: "DRAFT",
-      },
-    });
+    return withFindingCode(this.flow.prisma, workspace.auditYear, (code) =>
+      this.flow.prisma.finding.create({
+        data: {
+          ...body,
+          findingType,
+          workspaceId: id,
+          dueDate: body.dueDate ? new Date(body.dueDate) : null,
+          code,
+          status: "DRAFT",
+        },
+      }),
+    );
   }
 
   @Post("findings/:id/open")

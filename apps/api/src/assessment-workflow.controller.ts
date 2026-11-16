@@ -17,6 +17,7 @@ import { CurrentUser, Roles } from "./auth";
 import { AmiWorkflowService } from "./ami-workflow.service";
 import { AuditScheduleService } from "./audit-schedule.service";
 import { withEvidenceCode } from "./evidence-code";
+import { withFindingCode } from "./finding-code";
 
 const STANDARD_RESULTS = [
   "MELAMPAUI",
@@ -483,9 +484,6 @@ export class AssessmentWorkflowController {
     if (Number.isNaN(dueDate.getTime())) {
       throw new BadRequestException("Batas waktu perbaikan wajib diisi.");
     }
-    const count = await this.flow.prisma.finding.count({
-      where: { workspaceId: workspace.id },
-    });
     const findingType =
       body.findingType === "NC_MINOR"
         ? "KTS_MINOR"
@@ -514,39 +512,41 @@ export class AssessmentWorkflowController {
       status: "OPEN" as const,
     };
 
-    await this.flow.prisma.$transaction([
-      this.flow.prisma.selfAssessment.update({
-        where: { id },
-        data: {
-          responseStatus: "OPEN",
-          standardResult:
-            assessment.question.dimension === "STANDARD_ACHIEVEMENT"
-              ? (result as any)
-              : null,
-          processResult:
-            assessment.question.dimension === "PROCESS_CONFORMITY"
-              ? (result as any)
-              : null,
-          approvedById: user.id,
-          approvedAt: new Date(),
-          returnNote: note,
-          score: null,
-        },
-      }),
-      existing
-        ? this.flow.prisma.finding.update({
-            where: { id: existing.id },
-            data: findingData,
-          })
-        : this.flow.prisma.finding.create({
-            data: {
-              ...findingData,
-              code: `FND-${workspace.auditYear}-${String(count + 1).padStart(5, "0")}`,
-              workspaceId: workspace.id,
-              auditQuestionId: assessment.auditQuestionId,
-            },
-          }),
-    ]);
+    await withFindingCode(this.flow.prisma, workspace.auditYear, (findingCode) =>
+      this.flow.prisma.$transaction([
+        this.flow.prisma.selfAssessment.update({
+          where: { id },
+          data: {
+            responseStatus: "OPEN",
+            standardResult:
+              assessment.question.dimension === "STANDARD_ACHIEVEMENT"
+                ? (result as any)
+                : null,
+            processResult:
+              assessment.question.dimension === "PROCESS_CONFORMITY"
+                ? (result as any)
+                : null,
+            approvedById: user.id,
+            approvedAt: new Date(),
+            returnNote: note,
+            score: null,
+          },
+        }),
+        existing
+          ? this.flow.prisma.finding.update({
+              where: { id: existing.id },
+              data: findingData,
+            })
+          : this.flow.prisma.finding.create({
+              data: {
+                ...findingData,
+                code: findingCode,
+                workspaceId: workspace.id,
+                auditQuestionId: assessment.auditQuestionId,
+              },
+            }),
+      ]),
+    );
     await this.flow.log(
       user.id,
       user.username,

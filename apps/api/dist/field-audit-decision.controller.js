@@ -17,6 +17,7 @@ const common_1 = require("@nestjs/common");
 const auth_1 = require("./auth");
 const ami_workflow_service_1 = require("./ami-workflow.service");
 const audit_schedule_service_1 = require("./audit-schedule.service");
+const finding_code_1 = require("./finding-code");
 const STANDARD_RESULTS = new Set([
     "MELAMPAUI",
     "TERCAPAI",
@@ -153,17 +154,12 @@ let FieldAuditDecisionController = class FieldAuditDecisionController {
             };
         }
         const existingFinding = assessment.question.findings.find((item) => item.status === "OPEN");
-        const findingCount = requiresFinding
-            ? await this.flow.prisma.finding.count({
-                where: { workspaceId: workspace.id },
-            })
-            : 0;
         const workpaperAuditStatus = isIso
             ? processResult
             : requiresFinding
                 ? findingType
                 : "C";
-        await this.flow.prisma.$transaction(async (transaction) => {
+        await (0, finding_code_1.withFindingCode)(this.flow.prisma, workspace.auditYear, (findingCode) => this.flow.prisma.$transaction(async (transaction) => {
             await transaction.selfAssessment.update({
                 where: { id },
                 data: {
@@ -217,7 +213,7 @@ let FieldAuditDecisionController = class FieldAuditDecisionController {
                     await transaction.finding.create({
                         data: {
                             ...findingData,
-                            code: `FND-${workspace.auditYear}-${String(findingCount + 1).padStart(5, "0")}`,
+                            code: findingCode,
                             workspaceId: workspace.id,
                             auditQuestionId: assessment.auditQuestionId,
                         },
@@ -254,7 +250,7 @@ let FieldAuditDecisionController = class FieldAuditDecisionController {
                     },
                 },
             });
-        });
+        }));
         return {
             ok: true,
             status: requiresFinding ? "OPEN" : "APPROVED",

@@ -8,23 +8,29 @@ export declare class AssessmentWorkflowController {
     private mapProcessResult;
     detail(id: string, user: any): Promise<{
         workspace: {
+            _count: {
+                actions: number;
+                questions: number;
+                evidences: number;
+                findings: number;
+            };
             unit: {
                 id: string;
                 code: string;
-                name: string;
                 createdAt: Date;
                 updatedAt: Date;
+                name: string;
                 slug: string;
                 active: boolean;
             };
             program: {
                 id: string;
                 code: string;
-                name: string;
-                auditYear: number;
                 status: string;
                 createdAt: Date;
                 updatedAt: Date;
+                name: string;
+                auditYear: number;
                 startDate: Date;
                 endDate: Date;
             } | null;
@@ -56,24 +62,18 @@ export declare class AssessmentWorkflowController {
                 role: string;
                 userId: string;
             })[];
-            _count: {
-                questions: number;
-                evidences: number;
-                findings: number;
-                actions: number;
-            };
         } & {
             id: string;
+            status: import(".prisma/client").$Enums.WorkspaceStatus;
+            createdAt: Date;
+            updatedAt: Date;
             name: string;
             unitId: string;
             auditYear: number;
             programId: string | null;
-            status: import(".prisma/client").$Enums.WorkspaceStatus;
             instrumentStatus: import(".prisma/client").$Enums.ReviewStatus;
             instrumentVersion: number;
             instrumentChangeCount: number;
-            createdAt: Date;
-            updatedAt: Date;
         };
         questions: ({
             evidences: {
@@ -81,6 +81,9 @@ export declare class AssessmentWorkflowController {
                 code: string;
                 workspaceId: string;
                 auditQuestionId: string | null;
+                deletedAt: Date | null;
+                reviewStatus: import(".prisma/client").$Enums.EvidenceReviewStatus;
+                uploadedAt: Date;
                 evidenceType: import(".prisma/client").$Enums.EvidenceType;
                 title: string;
                 description: string | null;
@@ -90,21 +93,15 @@ export declare class AssessmentWorkflowController {
                 storageKey: string;
                 checksum: string;
                 confidentiality: string;
-                reviewStatus: import(".prisma/client").$Enums.EvidenceReviewStatus;
                 uploadedById: string;
-                uploadedAt: Date;
                 validatedAt: Date | null;
                 validationNote: string | null;
-                deletedAt: Date | null;
             }[];
             findings: {
                 id: string;
                 code: string;
                 workspaceId: string;
                 auditQuestionId: string | null;
-                status: import(".prisma/client").$Enums.FindingStatus;
-                createdAt: Date;
-                updatedAt: Date;
                 findingType: import(".prisma/client").$Enums.FindingType;
                 criteriaRegulation: string;
                 criteriaIso: string;
@@ -112,16 +109,19 @@ export declare class AssessmentWorkflowController {
                 objectiveEvidence: string;
                 gapStatement: string;
                 riskImpact: string;
+                status: import(".prisma/client").$Enums.FindingStatus;
                 ownerUserId: string | null;
                 dueDate: Date | null;
+                createdAt: Date;
+                updatedAt: Date;
             }[];
             masterQuestion: {
                 standard: {
                     id: string;
                     code: string;
+                    active: boolean;
                     title: string;
                     description: string | null;
-                    active: boolean;
                     source: string;
                     standardType: string;
                     regulationReference: string | null;
@@ -129,21 +129,21 @@ export declare class AssessmentWorkflowController {
                 isoClause: {
                     id: string;
                     code: string;
+                    active: boolean;
                     title: string;
                     description: string | null;
-                    active: boolean;
                 } | null;
             } & {
                 id: string;
                 code: string;
                 createdAt: Date;
                 updatedAt: Date;
+                question: string;
                 active: boolean;
                 dimension: import(".prisma/client").$Enums.QuestionDimension;
                 moduleCode: string;
                 required: boolean;
                 weight: import("@prisma/client/runtime/library").Decimal;
-                question: string;
                 criterionSource: string;
                 auditObjective: string | null;
                 expectedEvidence: string | null;
@@ -178,7 +178,6 @@ export declare class AssessmentWorkflowController {
         } & {
             id: string;
             workspaceId: string;
-            reviewStatus: import(".prisma/client").$Enums.ReviewStatus;
             masterQuestionId: string;
             dimension: import(".prisma/client").$Enums.QuestionDimension;
             questionSnapshot: string;
@@ -212,6 +211,7 @@ export declare class AssessmentWorkflowController {
             reviewedAt: Date | null;
             approvedById: string | null;
             approvedAt: Date | null;
+            reviewStatus: import(".prisma/client").$Enums.ReviewStatus;
         })[];
         evidences: ({
             auditQuestion: {
@@ -227,6 +227,9 @@ export declare class AssessmentWorkflowController {
             code: string;
             workspaceId: string;
             auditQuestionId: string | null;
+            deletedAt: Date | null;
+            reviewStatus: import(".prisma/client").$Enums.EvidenceReviewStatus;
+            uploadedAt: Date;
             evidenceType: import(".prisma/client").$Enums.EvidenceType;
             title: string;
             description: string | null;
@@ -236,21 +239,18 @@ export declare class AssessmentWorkflowController {
             storageKey: string;
             checksum: string;
             confidentiality: string;
-            reviewStatus: import(".prisma/client").$Enums.EvidenceReviewStatus;
             uploadedById: string;
-            uploadedAt: Date;
             validatedAt: Date | null;
             validationNote: string | null;
-            deletedAt: Date | null;
         })[];
         schedule: {
             id: string;
             workspaceId: string | null;
-            unitId: string;
-            programId: string;
             status: string;
             createdAt: Date;
             updatedAt: Date;
+            unitId: string;
+            programId: string;
             included: boolean;
             instrumentReviewStart: Date | null;
             instrumentReviewEnd: Date | null;
@@ -295,6 +295,9 @@ export declare class AssessmentWorkflowController {
         code: string;
         workspaceId: string;
         auditQuestionId: string | null;
+        deletedAt: Date | null;
+        reviewStatus: import(".prisma/client").$Enums.EvidenceReviewStatus;
+        uploadedAt: Date;
         evidenceType: import(".prisma/client").$Enums.EvidenceType;
         title: string;
         description: string | null;
@@ -304,12 +307,9 @@ export declare class AssessmentWorkflowController {
         storageKey: string;
         checksum: string;
         confidentiality: string;
-        reviewStatus: import(".prisma/client").$Enums.EvidenceReviewStatus;
         uploadedById: string;
-        uploadedAt: Date;
         validatedAt: Date | null;
         validationNote: string | null;
-        deletedAt: Date | null;
     }>;
     reviewAssessment(id: string, body: any, user: any): Promise<{
         id: string;
@@ -331,16 +331,16 @@ export declare class AssessmentWorkflowController {
     }>;
     openFieldAudit(id: string, user: any): Promise<{
         id: string;
+        status: import(".prisma/client").$Enums.WorkspaceStatus;
+        createdAt: Date;
+        updatedAt: Date;
         name: string;
         unitId: string;
         auditYear: number;
         programId: string | null;
-        status: import(".prisma/client").$Enums.WorkspaceStatus;
         instrumentStatus: import(".prisma/client").$Enums.ReviewStatus;
         instrumentVersion: number;
         instrumentChangeCount: number;
-        createdAt: Date;
-        updatedAt: Date;
     }>;
     fieldDecision(id: string, body: any, user: any): Promise<{
         ok: boolean;
@@ -355,22 +355,25 @@ export declare class AssessmentWorkflowController {
     }>;
     completeFieldAudit(id: string, user: any): Promise<{
         id: string;
+        status: import(".prisma/client").$Enums.WorkspaceStatus;
+        createdAt: Date;
+        updatedAt: Date;
         name: string;
         unitId: string;
         auditYear: number;
         programId: string | null;
-        status: import(".prisma/client").$Enums.WorkspaceStatus;
         instrumentStatus: import(".prisma/client").$Enums.ReviewStatus;
         instrumentVersion: number;
         instrumentChangeCount: number;
-        createdAt: Date;
-        updatedAt: Date;
     }>;
     uploadAssessmentEvidence(id: string, file: any, body: any, user: any): Promise<{
         id: string;
         code: string;
         workspaceId: string;
         auditQuestionId: string | null;
+        deletedAt: Date | null;
+        reviewStatus: import(".prisma/client").$Enums.EvidenceReviewStatus;
+        uploadedAt: Date;
         evidenceType: import(".prisma/client").$Enums.EvidenceType;
         title: string;
         description: string | null;
@@ -380,11 +383,8 @@ export declare class AssessmentWorkflowController {
         storageKey: string;
         checksum: string;
         confidentiality: string;
-        reviewStatus: import(".prisma/client").$Enums.EvidenceReviewStatus;
         uploadedById: string;
-        uploadedAt: Date;
         validatedAt: Date | null;
         validationNote: string | null;
-        deletedAt: Date | null;
     }>;
 }
