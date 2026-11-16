@@ -3,12 +3,55 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
 import { AssessmentWorkflowPanel as ExistingAssessmentWorkflowPanel } from "./AssessmentWorkflowPanel";
+import { EvidenceFileLinks } from "./EvidenceFileLinks";
 
 type RunAction = (
   path: string,
   init?: RequestInit,
   success?: string,
 ) => Promise<boolean>;
+
+const EVIDENCE_STATUS: Record<string, string> = {
+  PENDING: "Belum diperiksa",
+  VALID: "Valid",
+  INVALID: "Tidak valid",
+  CLARIFICATION: "Perlu klarifikasi",
+};
+
+function FieldEvidenceList({ evidences }: { evidences?: any[] }) {
+  const items = (evidences || []).filter((evidence) => !evidence.deletedAt);
+  return (
+    <div className="field-evidence-list">
+      <small>Bukti terunggah ({items.length})</small>
+      {items.length ? (
+        items.map((evidence) => (
+          <div className="field-evidence-row" key={evidence.id}>
+            <div>
+              <b>{evidence.title || evidence.fileName}</b>
+              <span>
+                {evidence.evidenceType === "LINK" ? "Link Google Drive" : evidence.fileName}
+                {" · "}
+                {EVIDENCE_STATUS[evidence.reviewStatus] || evidence.reviewStatus}
+              </span>
+            </div>
+            <EvidenceFileLinks evidence={evidence} compact />
+          </div>
+        ))
+      ) : (
+        <p>Auditee belum mengunggah bukti untuk butir ini.</p>
+      )}
+      <style jsx>{`
+        .field-evidence-list { display: grid; gap: .45rem; }
+        .field-evidence-list > small { font-weight: 800; color: #425b68; }
+        .field-evidence-list > p { margin: 0; color: #64748b; }
+        .field-evidence-row { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; padding: .55rem .7rem; border: 1px solid #e2e9ed; border-radius: 9px; background: #fff; }
+        .field-evidence-row > div { display: grid; gap: .1rem; min-width: 0; }
+        .field-evidence-row b { font-size: .88rem; color: #17324d; overflow-wrap: anywhere; }
+        .field-evidence-row span { font-size: .75rem; color: #64748b; overflow-wrap: anywhere; }
+      `}</style>
+    </div>
+  );
+}
 
 const STANDARD_RESULTS = [
   ["MELAMPAUI", "Melampaui"],
@@ -283,6 +326,9 @@ function AuditorFieldAuditPanel({
                 <div><small>Jawaban Auditee</small><p>{question.assessment?.implementationDescription || "—"}</p></div>
                 <div><small>Ringkasan bukti</small><p>{question.assessment?.evidenceSummary || "—"}</p></div>
               </div>
+              <div className="field-evidence-wrap">
+                <FieldEvidenceList evidences={question.evidences} />
+              </div>
               <footer>
                 <button
                   type="button"
@@ -314,6 +360,9 @@ function AuditorFieldAuditPanel({
             </header>
 
             <div className="dialog-body">
+              <section className="decision-section">
+                <FieldEvidenceList evidences={selected.evidences} />
+              </section>
               <section className="decision-section">
                 <h4>1. Kategori hasil</h4>
                 <label>
@@ -497,6 +546,7 @@ function AuditorFieldAuditPanel({
         .field-question-card h3 { margin: .45rem 0; font-size: 1rem; }
         .field-question-card p { margin: 0; color: #64748b; }
         .field-question-card footer { padding: .75rem 1rem; border-top: 1px solid #eef2f7; background: #f8fafc; }
+        .field-evidence-wrap { padding: 0 1rem 1rem; }
         .source-tags { display: flex; flex-wrap: wrap; gap: .4rem; }
         .source-tags span { padding: .25rem .55rem; border-radius: 999px; background: #e2e8f0; font-size: .75rem; font-weight: 700; }
         .source-tags .iso { background: #dbeafe; color: #1d4ed8; }
