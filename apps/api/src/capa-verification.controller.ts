@@ -44,6 +44,13 @@ export class CapaVerificationController {
       this.flow.prisma.finding.findMany({
         where: { workspaceId: id },
         include: {
+          question: {
+            select: {
+              id: true,
+              publishedQuestion: true,
+              questionSnapshot: true,
+            },
+          },
           actions: {
             include: { verifications: { orderBy: { verificationDate: "desc" } } },
             orderBy: { updatedAt: "desc" },

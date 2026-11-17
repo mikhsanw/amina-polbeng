@@ -29,6 +29,23 @@ const label = (value: unknown) => {
   return labels[text] || text.replaceAll("_", " ");
 };
 
+function FindingQuestion({ question }: { question?: any }) {
+  if (!question) return null;
+  const text = question.publishedQuestion || question.questionSnapshot;
+  if (!text) return null;
+  return (
+    <div className="finding-question">
+      <b>Pertanyaan yang menjadi temuan</b>
+      <p>{text}</p>
+      <style jsx>{`
+        .finding-question { margin-top: .8rem; padding: .7rem .85rem; border-left: 4px solid #2563eb; border-radius: 10px; background: #eff6ff; }
+        .finding-question b { color: #1e40af; font-size: .78rem; text-transform: uppercase; letter-spacing: .02em; }
+        .finding-question p { margin: .3rem 0 0; color: #0f172a; font-weight: 600; }
+      `}</style>
+    </div>
+  );
+}
+
 export function FindingCapaPanel({
   workspace,
   user,
@@ -188,6 +205,8 @@ export function FindingCapaPanel({
                     </span>
                   </header>
 
+                  <FindingQuestion question={finding.question} />
+
                   <div className="finding-grid">
                     <div><b>Kondisi</b><p>{finding.condition}</p></div>
                     <div><b>Kesenjangan</b><p>{finding.gapStatement || "—"}</p></div>
@@ -326,6 +345,7 @@ export function FindingCapaPanel({
             </header>
 
             <div className="modal-fields">
+              <FindingQuestion question={modal.finding.question} />
               {modal.type === "capa" && (
                 <>
                   <TextArea label="Koreksi langsung" value={draft.correction} set={(value) => setDraft({ ...draft, correction: value })} />
