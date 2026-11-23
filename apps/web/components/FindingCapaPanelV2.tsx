@@ -10,7 +10,7 @@ type RunAction = (
 ) => Promise<boolean>;
 
 type ModalState =
-  | { type: "capa"; finding: any; action?: any }
+  | { type: "capa"; finding: any; action?: any; edit?: boolean }
   | { type: "auditor"; finding: any; action: any }
   | { type: "lead"; finding: any; action: any; recommendation: any }
   | null;
@@ -28,6 +28,26 @@ const label = (value: unknown) => {
   };
   return labels[text] || text.replaceAll("_", " ");
 };
+
+function formatDate(value: string) {
+  // Batas jadwal disimpan sebagai akhir hari UTC; tampilkan tanggal kalendernya.
+  return new Date(value).toLocaleDateString("id-ID", {
+    dateStyle: "medium",
+    timeZone: "UTC",
+  });
+}
+
+/** CAPA hanya diterima API saat FOLLOW_UP atau REPORT_REVIEW. */
+const CAPA_OPEN_STATUSES = ["FOLLOW_UP", "REPORT_REVIEW"];
+
+function capaLockReason(status: string) {
+  if (!status || CAPA_OPEN_STATUSES.includes(status)) return "";
+  if (status === "REPORTING") return "Menunggu pelaporan auditor selesai.";
+  if (["CLOSED", "ARCHIVED", "CANCELLED"].includes(status)) {
+    return "Audit sudah ditutup. CAPA tidak dapat diubah lagi.";
+  }
+  return "CAPA dapat diisi setelah auditor menyelesaikan pelaporan.";
+}
 
 function FindingQuestion({ question }: { question?: any }) {
   if (!question) return null;
@@ -87,8 +107,15 @@ export function FindingCapaPanel({
   );
   const isLead = myAssignment === "LEAD_AUDITOR";
   const findings = flow?.findings || [];
+  const workspaceStatus = String(flow?.workspace?.status || workspace.status || "");
+  const capaLockedNote = capaLockReason(workspaceStatus);
+  const capaWindow = flow?.capaWindow;
+  const capaDeadlineNote =
+    capaWindow && !capaWindow.open && capaWindow.deadline
+      ? `Masa pengisian CAPA berakhir ${formatDate(capaWindow.deadline)}.`
+      : "";
 
-  function openCapa(finding: any, action?: any) {
+  function openCapa(finding: any, action?: any, edit = false) {
     setDraft({
       correction: action?.correction || "",
       analysisMethod: action?.analysisMethod || "FIVE_WHY",
@@ -102,7 +129,7 @@ export function FindingCapaPanel({
       evidenceTitle: "",
       evidenceUrl: "",
     });
-    setModal({ type: "capa", finding, action });
+    setModal({ type: "capa", finding, action, edit });
   }
 
   function openAuditor(finding: any, action: any) {
@@ -123,11 +150,41 @@ export function FindingCapaPanel({
     setModal({ type: "lead", finding, action, recommendation });
   }
 
+  async function withdrawCapa(finding: any, action: any) {
+    const firstCycle = !(action.verifications || []).length;
+    const message = firstCycle
+      ? `Tarik CAPA ${finding.code}? CAPA dan seluruh link buktinya dihapus, dan temuan kembali Open.`
+      : `Tarik CAPA ${finding.code}? Link bukti putaran ini dihapus dan CAPA kembali ke status Tetap Open. Riwayat verifikasi sebelumnya tetap tersimpan.`;
+    if (!window.confirm(message)) return;
+    const ok = await run(
+      `/audit-flow/actions/${action.id}/capa-withdraw`,
+      { method: "POST" },
+      "CAPA ditarik. Silakan isi dan kirim ulang bila sudah siap.",
+    );
+    if (ok) await load();
+  }
+
+  async function deleteCapaLink(evidence: any) {
+    if (!window.confirm(`Hapus link bukti "${evidence.title}"?`)) return;
+    const ok = await run(
+      `/audit-flow/capa-evidences/${evidence.id}`,
+      { method: "DELETE" },
+      "Link bukti CAPA dihapus.",
+    );
+    if (ok) await load();
+  }
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!modal) return;
     let ok = false;
-    if (modal.type === "capa") {
+    if (modal.type === "capa" && modal.edit) {
+      ok = await run(
+        `/audit-flow/actions/${modal.action.id}/capa-update`,
+        { method: "POST", body: JSON.stringify(draft) },
+        "Perubahan CAPA disimpan.",
+      );
+    } else if (modal.type === "capa") {
       ok = await run(
         `/audit-flow/findings/${modal.finding.id}/capa-submit`,
         { method: "POST", body: JSON.stringify(draft) },
@@ -188,6 +245,12 @@ export function FindingCapaPanel({
               const finalVerification = action?.verifications?.find(
                 (item: any) => item.decidedAt,
               );
+              const editable =
+                isAuditee &&
+                action?.status === "READY_VERIFY" &&
+                !recommendation;
+              const editLockNote = capaLockedNote || capaDeadlineNote;
+              const canEdit = editable && !editLockNote;
               const overdue =
                 action?.targetDate &&
                 new Date(action.targetDate).getTime() < Date.now() &&
@@ -244,14 +307,25 @@ export function FindingCapaPanel({
                         <b>Bukti CAPA</b>
                         {(action.evidences || []).length ? (
                           action.evidences.map((evidence: any) => (
-                            <a
-                              key={evidence.id}
-                              href={evidence.storageKey}
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              {evidence.title}
-                            </a>
+                            <span className="capa-link" key={evidence.id}>
+                              <a
+                                href={evidence.storageKey}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                {evidence.title}
+                              </a>
+                              {canEdit && action.evidences.length > 1 && (
+                                <button
+                                  type="button"
+                                  className="capa-link-delete"
+                                  disabled={busy}
+                                  onClick={() => deleteCapaLink(evidence)}
+                                >
+                                  Hapus
+                                </button>
+                              )}
+                            </span>
                           ))
                         ) : (
                           <span>Belum ada link bukti CAPA.</span>
@@ -287,14 +361,58 @@ export function FindingCapaPanel({
                         ["IN_PROGRESS", "NOT_EFFECTIVE", "RETURNED", "APPROVED"].includes(
                           action.status,
                         )) && (
-                        <button
-                          type="button"
-                          className="small primary"
-                          onClick={() => openCapa(finding, action)}
-                        >
-                          {action ? "Perbarui dan Kirim Ulang CAPA" : "Isi dan Kirim CAPA"}
-                        </button>
+                        <div className="capa-submit">
+                          <button
+                            type="button"
+                            className="small primary"
+                            disabled={busy || Boolean(capaLockedNote)}
+                            title={capaLockedNote || undefined}
+                            onClick={() => openCapa(finding, action)}
+                          >
+                            {action ? "Perbarui dan Kirim Ulang CAPA" : "Isi dan Kirim CAPA"}
+                          </button>
+                          {capaLockedNote && (
+                            <small className="capa-locked-note">{capaLockedNote}</small>
+                          )}
+                        </div>
                       )}
+
+                    {editable && (
+                      <div className="capa-submit">
+                        <div className="capa-edit-buttons">
+                          <button
+                            type="button"
+                            className="small primary"
+                            disabled={busy || !canEdit}
+                            title={editLockNote || undefined}
+                            onClick={() => openCapa(finding, action, true)}
+                          >
+                            Edit CAPA
+                          </button>
+                          <button
+                            type="button"
+                            className="small danger-outline"
+                            disabled={busy || !canEdit}
+                            title={editLockNote || undefined}
+                            onClick={() => withdrawCapa(finding, action)}
+                          >
+                            Tarik CAPA
+                          </button>
+                        </div>
+                        <small className={editLockNote ? "capa-locked-note" : "capa-hint"}>
+                          {editLockNote ||
+                            (capaWindow?.deadline
+                              ? `CAPA masih dapat diubah atau ditarik sampai Auditor memberi rekomendasi, paling lambat ${formatDate(capaWindow.deadline)}.`
+                              : "CAPA masih dapat diubah atau ditarik sampai Auditor memberi rekomendasi.")}
+                        </small>
+                      </div>
+                    )}
+
+                    {isAuditee && action?.status === "READY_VERIFY" && recommendation && (
+                      <small className="capa-hint">
+                        Auditor sudah memberi rekomendasi. CAPA tidak dapat diubah lagi.
+                      </small>
+                    )}
 
                     {isAuditor && action?.status === "READY_VERIFY" && !recommendation && (
                       <button
@@ -333,7 +451,9 @@ export function FindingCapaPanel({
                 <small>{modal.finding.code}</small>
                 <h3>
                   {modal.type === "capa"
-                    ? "CAPA dan Bukti Pelaksanaan"
+                    ? modal.edit
+                      ? "Edit CAPA"
+                      : "CAPA dan Bukti Pelaksanaan"
                     : modal.type === "auditor"
                       ? "Rekomendasi Auditor"
                       : "Keputusan Ketua Auditor"}
@@ -365,13 +485,19 @@ export function FindingCapaPanel({
                     <input required type="date" value={draft.targetDate || ""} onChange={(event) => setDraft({ ...draft, targetDate: event.target.value })} />
                   </label>
                   <TextArea label="Catatan pelaksanaan" value={draft.progressNote} set={(value) => setDraft({ ...draft, progressNote: value })} />
+                  {modal.edit && (
+                    <div className="status-note">
+                      Link bukti yang sudah ada tetap tersimpan. Isi kolom di bawah
+                      hanya bila ingin menambah link baru.
+                    </div>
+                  )}
                   <label>
-                    Nama dokumen bukti CAPA
-                    <input required value={draft.evidenceTitle || ""} onChange={(event) => setDraft({ ...draft, evidenceTitle: event.target.value })} />
+                    {modal.edit ? "Nama dokumen bukti tambahan (opsional)" : "Nama dokumen bukti CAPA"}
+                    <input required={!modal.edit || Boolean(draft.evidenceUrl)} value={draft.evidenceTitle || ""} onChange={(event) => setDraft({ ...draft, evidenceTitle: event.target.value })} />
                   </label>
                   <label>
-                    Link bukti CAPA
-                    <input required type="url" placeholder="https://drive.google.com/..." value={draft.evidenceUrl || ""} onChange={(event) => setDraft({ ...draft, evidenceUrl: event.target.value })} />
+                    {modal.edit ? "Link bukti tambahan (opsional)" : "Link bukti CAPA"}
+                    <input required={!modal.edit || Boolean(draft.evidenceTitle)} type="url" placeholder="https://drive.google.com/..." value={draft.evidenceUrl || ""} onChange={(event) => setDraft({ ...draft, evidenceUrl: event.target.value })} />
                   </label>
                 </>
               )}
@@ -407,7 +533,11 @@ export function FindingCapaPanel({
             <footer>
               <button type="button" onClick={() => setModal(null)}>Batal</button>
               <button className="primary" disabled={busy}>
-                {modal.type === "capa" ? "Kirim CAPA" : "Simpan Keputusan"}
+                {modal.type === "capa"
+                  ? modal.edit
+                    ? "Simpan Perubahan"
+                    : "Kirim CAPA"
+                  : "Simpan Keputusan"}
               </button>
             </footer>
           </form>
@@ -431,6 +561,18 @@ export function FindingCapaPanel({
         .overdue { color: #b91c1c; font-weight: 900; }
         .capa-evidence-list { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; }
         .capa-evidence-list a { color: #1d4ed8; font-weight: 800; text-decoration: none; }
+        .capa-submit { display: grid; gap: .3rem; justify-items: start; }
+        .capa-submit button:disabled { opacity: .55; cursor: not-allowed; }
+        .capa-locked-note { color: #9a3412; font-weight: 700; }
+        .capa-hint { color: #475569; }
+        .capa-edit-buttons { display: flex; flex-wrap: wrap; gap: .5rem; }
+        .capa-edit-buttons button { width: auto; margin: 0; }
+        .capa-edit-buttons button:disabled { opacity: .55; cursor: not-allowed; }
+        .danger-outline { border: 1px solid #fecaca; background: #fff; color: #b91c1c; }
+        .danger-outline:hover:not(:disabled) { background: #fef2f2; }
+        .capa-link { display: inline-flex; align-items: center; gap: .35rem; }
+        .capa-link-delete { min-height: 0; margin: 0; padding: .15rem .45rem; border: 1px solid #fecaca; border-radius: 7px; background: #fff; color: #b91c1c; font-size: .72rem; font-weight: 700; cursor: pointer; }
+        .capa-link-delete:hover:not(:disabled) { background: #fef2f2; }
         .status-note { padding: .7rem; border-radius: 9px; background: #eff6ff; color: #334155; }
         .status-note.warning { margin-top: .8rem; background: #fff7ed; color: #9a3412; }
         .status-note.final { background: #ecfdf5; }

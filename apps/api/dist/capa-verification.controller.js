@@ -17,12 +17,46 @@ const common_1 = require("@nestjs/common");
 const node_crypto_1 = require("node:crypto");
 const auth_1 = require("./auth");
 const ami_workflow_service_1 = require("./ami-workflow.service");
+const audit_schedule_service_1 = require("./audit-schedule.service");
 exports.CAPA_EVIDENCE_MARKER = "CAPA_EVIDENCE:";
 function text(value, label) {
     const result = String(value ?? "").trim();
     if (!result)
         throw new common_1.BadRequestException(`${label} wajib diisi.`);
     return result;
+}
+const CAPA_OPEN_WORKSPACE_STATUSES = ["FOLLOW_UP", "REPORT_REVIEW"];
+function capaPayload(body) {
+    const targetDate = new Date(text(body.targetDate, "Target penyelesaian"));
+    if (Number.isNaN(targetDate.getTime())) {
+        throw new common_1.BadRequestException("Target penyelesaian tidak valid.");
+    }
+    return {
+        correction: text(body.correction, "Koreksi langsung"),
+        analysisMethod: text(body.analysisMethod || "FIVE_WHY", "Metode analisis"),
+        rootCauseStatement: text(body.rootCauseStatement, "Akar masalah"),
+        correctiveAction: text(body.correctiveAction, "Tindakan korektif"),
+        successIndicator: text(body.successIndicator, "Indikator keberhasilan"),
+        targetDate,
+    };
+}
+function capaLinkData(action, auditQuestionId, evidenceTitle, evidenceUrl, userId) {
+    return {
+        code: `CAPA-LINK-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        workspaceId: action.workspaceId,
+        auditQuestionId,
+        evidenceType: "LINK",
+        title: evidenceTitle,
+        description: `${exports.CAPA_EVIDENCE_MARKER}${action.id}`,
+        fileName: evidenceTitle,
+        mimeType: "text/uri-list",
+        fileSizeBytes: 0,
+        storageKey: evidenceUrl,
+        checksum: (0, node_crypto_1.createHash)("sha256").update(evidenceUrl).digest("hex"),
+        confidentiality: "INTERNAL",
+        reviewStatus: "PENDING",
+        uploadedById: userId,
+    };
 }
 function httpsUrl(value) {
     const raw = text(value, "Link bukti CAPA");
@@ -40,8 +74,37 @@ function httpsUrl(value) {
 }
 let CapaVerificationController = class CapaVerificationController {
     flow;
-    constructor(flow) {
+    schedule;
+    constructor(flow, schedule) {
         this.flow = flow;
+        this.schedule = schedule;
+    }
+    async editableCapa(actionId, user) {
+        const action = await this.flow.prisma.correctiveAction.findUniqueOrThrow({
+            where: { id: actionId },
+            include: { workspace: true, finding: true, verifications: true },
+        });
+        if (action.workspace.unitId !== user.unitId) {
+            throw new common_1.ForbiddenException("Bukan Auditee unit target.");
+        }
+        this.flow.requireStatus(action.workspace.status, CAPA_OPEN_WORKSPACE_STATUSES);
+        if (action.status !== "READY_VERIFY") {
+            throw new common_1.BadRequestException("CAPA ini tidak sedang menunggu verifikasi.");
+        }
+        if (action.verifications.some((item) => !item.decidedAt)) {
+            throw new common_1.BadRequestException("Auditor sudah memberi rekomendasi, CAPA tidak dapat diubah lagi.");
+        }
+        await this.schedule.requireOpen(action.workspaceId, "FOLLOW_UP");
+        return action;
+    }
+    async capaLinks(actionId) {
+        return this.flow.prisma.evidence.findMany({
+            where: {
+                deletedAt: null,
+                description: `${exports.CAPA_EVIDENCE_MARKER}${actionId}`,
+            },
+            select: { id: true },
+        });
     }
     async flowDetail(id, user) {
         const workspace = await this.flow.workspace(id, user);
@@ -80,8 +143,10 @@ let CapaVerificationController = class CapaVerificationController {
             list.push(evidence);
             evidenceByAction.set(actionId, list);
         }
+        const window = await this.schedule.state(id, "FOLLOW_UP");
         return {
             workspace,
+            capaWindow: { open: window.open, deadline: window.deadline },
             findings: findings.map((finding) => ({
                 ...finding,
                 actions: finding.actions.map((action) => ({
@@ -109,18 +174,8 @@ let CapaVerificationController = class CapaVerificationController {
             "IMPLEMENTATION",
             "VERIFICATION",
         ]);
-        const targetDate = new Date(text(body.targetDate, "Target penyelesaian"));
-        if (Number.isNaN(targetDate.getTime())) {
-            throw new common_1.BadRequestException("Target penyelesaian tidak valid.");
-        }
-        const payload = {
-            correction: text(body.correction, "Koreksi langsung"),
-            analysisMethod: text(body.analysisMethod || "FIVE_WHY", "Metode analisis"),
-            rootCauseStatement: text(body.rootCauseStatement, "Akar masalah"),
-            correctiveAction: text(body.correctiveAction, "Tindakan korektif"),
-            successIndicator: text(body.successIndicator, "Indikator keberhasilan"),
-            targetDate,
-        };
+        const payload = capaPayload(body);
+        const targetDate = payload.targetDate;
         const evidenceTitle = text(body.evidenceTitle, "Nama dokumen bukti CAPA");
         const evidenceUrl = httpsUrl(body.evidenceUrl);
         const previous = finding.actions[0];
@@ -146,22 +201,7 @@ let CapaVerificationController = class CapaVerificationController {
                     },
                 });
             const evidence = await tx.evidence.create({
-                data: {
-                    code: `CAPA-LINK-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                    workspaceId: finding.workspaceId,
-                    auditQuestionId: finding.auditQuestionId,
-                    evidenceType: "LINK",
-                    title: evidenceTitle,
-                    description: `${exports.CAPA_EVIDENCE_MARKER}${action.id}`,
-                    fileName: evidenceTitle,
-                    mimeType: "text/uri-list",
-                    fileSizeBytes: 0,
-                    storageKey: evidenceUrl,
-                    checksum: (0, node_crypto_1.createHash)("sha256").update(evidenceUrl).digest("hex"),
-                    confidentiality: "INTERNAL",
-                    reviewStatus: "PENDING",
-                    uploadedById: user.id,
-                },
+                data: capaLinkData(action, finding.auditQuestionId, evidenceTitle, evidenceUrl, user.id),
             });
             await tx.finding.update({ where: { id }, data: { status: "VERIFICATION" } });
             return { action, evidence };
@@ -176,6 +216,93 @@ let CapaVerificationController = class CapaVerificationController {
             targetDate: targetDate.toISOString(),
         });
         return result;
+    }
+    async updateCapa(id, body, user) {
+        const action = await this.editableCapa(id, user);
+        const payload = capaPayload(body);
+        const wantsLink = String(body.evidenceUrl ?? "").trim() !== "";
+        const evidenceTitle = wantsLink
+            ? text(body.evidenceTitle, "Nama dokumen bukti CAPA")
+            : "";
+        const evidenceUrl = wantsLink ? httpsUrl(body.evidenceUrl) : "";
+        const updated = await this.flow.prisma.$transaction(async (tx) => {
+            const result = await tx.correctiveAction.update({
+                where: { id },
+                data: {
+                    ...payload,
+                    progressNote: String(body.progressNote ?? action.progressNote ?? "").trim() || null,
+                },
+            });
+            if (wantsLink) {
+                await tx.evidence.create({
+                    data: capaLinkData(action, action.finding.auditQuestionId, evidenceTitle, evidenceUrl, user.id),
+                });
+            }
+            return result;
+        });
+        await this.flow.log(user.id, user.username, "CAPA_UPDATED", "CorrectiveAction", id, action.workspaceId, {
+            findingCode: action.finding.code,
+            targetDate: payload.targetDate.toISOString(),
+            ...(wantsLink ? { evidenceTitle, evidenceUrl } : {}),
+        });
+        return updated;
+    }
+    async deleteCapaEvidence(id, user) {
+        const evidence = await this.flow.prisma.evidence.findUniqueOrThrow({
+            where: { id },
+        });
+        const description = String(evidence.description || "");
+        if (!description.startsWith(exports.CAPA_EVIDENCE_MARKER) || evidence.deletedAt) {
+            throw new common_1.BadRequestException("Link bukti CAPA tidak ditemukan.");
+        }
+        const actionId = description.slice(exports.CAPA_EVIDENCE_MARKER.length);
+        const action = await this.editableCapa(actionId, user);
+        const links = await this.capaLinks(actionId);
+        if (links.length <= 1) {
+            throw new common_1.BadRequestException("CAPA wajib memiliki minimal satu link bukti. Tambahkan link baru dulu, atau tarik CAPA.");
+        }
+        await this.flow.prisma.evidence.update({
+            where: { id },
+            data: { deletedAt: new Date() },
+        });
+        await this.flow.log(user.id, user.username, "CAPA_EVIDENCE_DELETED", "Evidence", id, action.workspaceId, {
+            findingCode: action.finding.code,
+            evidenceTitle: evidence.title,
+            evidenceUrl: evidence.storageKey,
+        });
+        return { ok: true };
+    }
+    async withdrawCapa(id, user) {
+        const action = await this.editableCapa(id, user);
+        const links = await this.capaLinks(id);
+        const firstCycle = action.verifications.length === 0;
+        await this.flow.prisma.$transaction(async (tx) => {
+            if (links.length) {
+                await tx.evidence.updateMany({
+                    where: { id: { in: links.map((link) => link.id) } },
+                    data: { deletedAt: new Date() },
+                });
+            }
+            if (firstCycle) {
+                await tx.correctiveAction.delete({ where: { id } });
+                await tx.finding.update({
+                    where: { id: action.findingId },
+                    data: { status: "OPEN" },
+                });
+            }
+            else {
+                await tx.correctiveAction.update({
+                    where: { id },
+                    data: { status: "NOT_EFFECTIVE" },
+                });
+                await tx.finding.update({
+                    where: { id: action.findingId },
+                    data: { status: "IMPLEMENTATION" },
+                });
+            }
+        });
+        await this.flow.log(user.id, user.username, "CAPA_WITHDRAWN", "CorrectiveAction", id, action.workspaceId, { findingCode: action.finding.code, deletedAction: firstCycle });
+        return { ok: true, deleted: firstCycle };
     }
     async auditorVerification(id, body, user) {
         const action = await this.flow.prisma.correctiveAction.findUniqueOrThrow({
@@ -318,6 +445,34 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], CapaVerificationController.prototype, "submitCapa", null);
 __decorate([
+    (0, common_1.Post)("actions/:id/capa-update"),
+    (0, auth_1.Roles)("AUDITEE"),
+    __param(0, (0, common_1.Param)("id")),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, auth_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object, Object]),
+    __metadata("design:returntype", Promise)
+], CapaVerificationController.prototype, "updateCapa", null);
+__decorate([
+    (0, common_1.Delete)("capa-evidences/:id"),
+    (0, auth_1.Roles)("AUDITEE"),
+    __param(0, (0, common_1.Param)("id")),
+    __param(1, (0, auth_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", Promise)
+], CapaVerificationController.prototype, "deleteCapaEvidence", null);
+__decorate([
+    (0, common_1.Post)("actions/:id/capa-withdraw"),
+    (0, auth_1.Roles)("AUDITEE"),
+    __param(0, (0, common_1.Param)("id")),
+    __param(1, (0, auth_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", Promise)
+], CapaVerificationController.prototype, "withdrawCapa", null);
+__decorate([
     (0, common_1.Post)("actions/:id/auditor-verification"),
     (0, auth_1.Roles)("AUDITOR", "KETUA_AUDITOR"),
     __param(0, (0, common_1.Param)("id")),
@@ -339,6 +494,7 @@ __decorate([
 ], CapaVerificationController.prototype, "leadVerification", null);
 exports.CapaVerificationController = CapaVerificationController = __decorate([
     (0, common_1.Controller)("audit-flow"),
-    __metadata("design:paramtypes", [ami_workflow_service_1.AmiWorkflowService])
+    __metadata("design:paramtypes", [ami_workflow_service_1.AmiWorkflowService,
+        audit_schedule_service_1.AuditScheduleService])
 ], CapaVerificationController);
 //# sourceMappingURL=capa-verification.controller.js.map

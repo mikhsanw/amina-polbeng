@@ -1,8 +1,12 @@
 import { AmiWorkflowService } from "./ami-workflow.service";
+import { AuditScheduleService } from "./audit-schedule.service";
 export declare const CAPA_EVIDENCE_MARKER = "CAPA_EVIDENCE:";
 export declare class CapaVerificationController {
     private readonly flow;
-    constructor(flow: AmiWorkflowService);
+    private readonly schedule;
+    constructor(flow: AmiWorkflowService, schedule: AuditScheduleService);
+    private editableCapa;
+    private capaLinks;
     flowDetail(id: string, user: any): Promise<{
         workspace: {
             unit: {
@@ -71,6 +75,10 @@ export declare class CapaVerificationController {
             instrumentChangeCount: number;
             createdAt: Date;
             updatedAt: Date;
+        };
+        capaWindow: {
+            open: boolean;
+            deadline: Date | null;
         };
         findings: {
             actions: {
@@ -167,6 +175,30 @@ export declare class CapaVerificationController {
             validatedAt: Date | null;
             validationNote: string | null;
         };
+    }>;
+    updateCapa(id: string, body: any, user: any): Promise<{
+        id: string;
+        status: import(".prisma/client").$Enums.ActionStatus;
+        createdAt: Date;
+        updatedAt: Date;
+        workspaceId: string;
+        correctiveAction: string;
+        findingId: string;
+        correction: string;
+        analysisMethod: string;
+        rootCauseStatement: string;
+        successIndicator: string;
+        picUserId: string | null;
+        targetDate: Date;
+        progressPercent: number;
+        progressNote: string | null;
+    }>;
+    deleteCapaEvidence(id: string, user: any): Promise<{
+        ok: boolean;
+    }>;
+    withdrawCapa(id: string, user: any): Promise<{
+        ok: boolean;
+        deleted: boolean;
     }>;
     auditorVerification(id: string, body: any, user: any): Promise<{
         id: string;
