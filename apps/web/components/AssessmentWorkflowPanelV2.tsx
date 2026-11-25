@@ -101,6 +101,7 @@ export function AssessmentWorkflowPanel(props: {
   myAssignment?: string;
   busy: boolean;
   run: RunAction;
+  refreshToken?: string;
 }) {
   const { workspace, myAssignment } = props;
   const isAssignedAuditor = ["AUDITOR", "LEAD_AUDITOR"].includes(
@@ -120,12 +121,14 @@ function AuditorFieldAuditPanel({
     myAssignment,
   busy,
   run,
+  refreshToken,
 }: {
   workspace: any;
   user: any;
   myAssignment?: string;
   busy: boolean;
   run: RunAction;
+  refreshToken?: string;
 }) {
   const [data, setData] = useState<any>(null);
   const [selected, setSelected] = useState<any>(null);
@@ -142,9 +145,11 @@ function AuditorFieldAuditPanel({
     }
   };
 
+  // Muat ulang daftar saat induk mendeteksi perubahan (mis. Auditor lain
+  // menyimpan). Dialog yang terbuka dan isiannya tidak ikut direset.
   useEffect(() => {
     load();
-  }, [workspace.id]);
+  }, [workspace.id, refreshToken]);
 
   const questions = data?.questions || [];
   const completed = useMemo(

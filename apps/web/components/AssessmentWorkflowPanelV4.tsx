@@ -39,6 +39,8 @@ export function AssessmentWorkflowPanel(props: {
   myAssignment?: string;
   busy: boolean;
   run: RunAction;
+  /** Berubah saat induk mendeteksi data baru; panel memuat ulang data tanpa dipasang ulang. */
+  refreshToken?: string;
 }) {
   const { workspace, myAssignment } = props;
   if (workspace.status === "FIELD_AUDIT" && isAssignedAuditor(myAssignment)) {
@@ -53,12 +55,14 @@ function SelfAssessmentDeskPanel({
   myAssignment,
   busy,
   run,
+  refreshToken,
 }: {
   workspace: any;
   user: any;
   myAssignment?: string;
   busy: boolean;
   run: RunAction;
+  refreshToken?: string;
 }) {
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState("");
@@ -73,18 +77,28 @@ function SelfAssessmentDeskPanel({
     }
   };
 
+  const polledByParent = refreshToken !== undefined;
+
+  useEffect(() => {
+    // Bila induk (V6) sudah memantau data, panel ini cukup memuat ulang saat
+    // sinyal refreshToken berubah, tanpa polling sendiri.
+    if (polledByParent) return;
+    const timer = window.setInterval(load, 4000);
+    return () => window.clearInterval(timer);
+  }, [workspace.id, polledByParent]);
+
   useEffect(() => {
     load();
-    const timer = window.setInterval(load, 4000);
+  }, [workspace.id, refreshToken]);
+
+  useEffect(() => {
     const onEvidenceChanged = (event: Event) => {
       const workspaceId = (event as CustomEvent)?.detail?.workspaceId;
       if (!workspaceId || workspaceId === workspace.id) load();
     };
     window.addEventListener("sami:evidence-changed", onEvidenceChanged);
-    return () => {
-      window.clearInterval(timer);
+    return () =>
       window.removeEventListener("sami:evidence-changed", onEvidenceChanged);
-    };
   }, [workspace.id]);
 
   async function perform(

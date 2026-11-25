@@ -164,7 +164,9 @@ function AuditeeCorrectionSubmit(props: {
         </div>
       </section>
 
-      <ExistingPanel key={signature || "auditee-field"} {...props} />
+      {/* Sinyal data baru, bukan key: panel tidak dipasang ulang sehingga isian
+          yang sedang diketik tidak hilang saat pengguna lain menyimpan. */}
+      <ExistingPanel {...props} refreshToken={signature} />
 
       <style jsx>{`
         .field-correction-wrapper { display: grid; gap: 1rem; }
@@ -358,7 +360,9 @@ function AuditorCorrectionMonitor(props: {
         tetap aktif tanpa menunggu pengiriman Auditee.
       </section>
 
-      <ExistingPanel key={signature || "auditor-field"} {...props} />
+      {/* Sinyal data baru, bukan key: dialog "Tetapkan Hasil Lapangan" yang
+          sedang terbuka tetap utuh saat Auditor lain menyimpan. */}
+      <ExistingPanel {...props} refreshToken={signature} />
 
       <style jsx>{`
         .field-correction-wrapper { display: grid; gap: 1rem; }
