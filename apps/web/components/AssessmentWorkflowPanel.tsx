@@ -12,7 +12,9 @@ type RunAction = (
 const hasRole = (user: any, ...roles: string[]) =>
   user.roles?.some((role: string) => roles.includes(role));
 const label = (value: unknown) =>
-  String(value ?? "—").replaceAll("_", " ");
+  value === "FIELD_NOT_ASSESSED"
+    ? "TIDAK DINILAI (TAHAP LAPANGAN BERAKHIR)"
+    : String(value ?? "—").replaceAll("_", " ");
 const resultLabel = (value: unknown) => {
   const text = String(value ?? "—");
   if (text === "BELUM_DIUKUR") return "TIDAK DIUKUR";

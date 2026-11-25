@@ -9,10 +9,19 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.WorkflowAutomationService = void 0;
+exports.WorkflowAutomationService = exports.FIELD_NOT_ASSESSED = void 0;
 const common_1 = require("@nestjs/common");
 const app_service_1 = require("./app.service");
 const prisma_service_1 = require("./prisma.service");
+const FIELD_DECIDED = ["APPROVED", "OPEN"];
+exports.FIELD_NOT_ASSESSED = "FIELD_NOT_ASSESSED";
+const AFTER_FIELD_AUDIT = [
+    "REPORTING",
+    "REPORT_REVIEW",
+    "FOLLOW_UP",
+    "CLOSED",
+    "ARCHIVED",
+];
 let WorkflowAutomationService = class WorkflowAutomationService {
     prisma;
     app;
@@ -213,21 +222,62 @@ let WorkflowAutomationService = class WorkflowAutomationService {
         await this.notifyRoleUsers(workspace.id, "ADMIN_MUTU", "SELF_ASSESSMENT_APPROVED", "Tenggat review Auditor berakhir", `${workspace.unit.name}: ${unresolved} butir dan ${pendingEvidence} bukti belum diputuskan. Admin Mutu harus melanjutkan, mengembalikan, atau mengganti Auditor.`);
         await this.app.log(undefined, "SYSTEM", "AUTO_DESK_REVIEW_DEADLINE", "AuditWorkspace", workspace.id, workspace.id, { unresolved, pendingEvidence, overdue: true });
     }
-    async closeFieldAuditByDeadline(workspace) {
-        const unresolved = await this.prisma.selfAssessment.count({
+    async undecidedFieldItems(workspaceId) {
+        return this.prisma.selfAssessment.findMany({
             where: {
-                question: { workspaceId: workspace.id, excluded: false },
-                responseStatus: { notIn: ["APPROVED", "OPEN"] },
+                question: { workspaceId, excluded: false },
+                responseStatus: { notIn: [...FIELD_DECIDED, exports.FIELD_NOT_ASSESSED] },
             },
+            select: { id: true, responseStatus: true },
         });
-        await this.prisma.auditWorkspace.update({
-            where: { id: workspace.id },
-            data: { status: "REPORTING" },
+    }
+    async markNotAssessed(items) {
+        if (!items.length)
+            return;
+        await this.prisma.selfAssessment.updateMany({
+            where: { id: { in: items.map((item) => item.id) } },
+            data: { responseStatus: exports.FIELD_NOT_ASSESSED },
         });
+    }
+    async repairUndecidedAfterFieldAudit(workspace) {
+        if (!AFTER_FIELD_AUDIT.includes(workspace.status))
+            return;
+        const items = await this.undecidedFieldItems(workspace.id);
+        if (!items.length)
+            return;
+        await this.markNotAssessed(items);
+        await this.app.log(undefined, "SYSTEM", "AUTO_FIELD_NOT_ASSESSED_REPAIRED", "AuditWorkspace", workspace.id, workspace.id, {
+            workspaceStatus: workspace.status,
+            notAssessed: items.map((item) => ({
+                id: item.id,
+                status: item.responseStatus,
+            })),
+        });
+    }
+    async closeFieldAuditByDeadline(workspace) {
+        const items = await this.undecidedFieldItems(workspace.id);
+        const unresolved = items.length;
+        await this.prisma.$transaction([
+            this.prisma.selfAssessment.updateMany({
+                where: { id: { in: items.map((item) => item.id) } },
+                data: { responseStatus: exports.FIELD_NOT_ASSESSED },
+            }),
+            this.prisma.auditWorkspace.update({
+                where: { id: workspace.id },
+                data: { status: "REPORTING" },
+            }),
+        ]);
         for (const role of ["LEAD_AUDITOR", "AUDITOR"]) {
-            await this.notifyAssignment(workspace.id, role, "WORKPAPER_SUBMITTED", "Assessment lapangan ditutup oleh tenggat", `${unresolved} butir belum mempunyai keputusan lapangan dan harus dicatat dalam laporan.`);
+            await this.notifyAssignment(workspace.id, role, "WORKPAPER_SUBMITTED", "Assessment lapangan ditutup oleh tenggat", `${unresolved} butir tidak sempat dinilai pada assessment lapangan dan dicatat "tidak dinilai" dalam laporan.`);
         }
-        await this.app.log(undefined, "SYSTEM", "AUTO_FIELD_AUDIT_DEADLINE", "AuditWorkspace", workspace.id, workspace.id, { unresolved, overdue: true });
+        await this.app.log(undefined, "SYSTEM", "AUTO_FIELD_AUDIT_DEADLINE", "AuditWorkspace", workspace.id, workspace.id, {
+            unresolved,
+            overdue: true,
+            notAssessed: items.map((item) => ({
+                id: item.id,
+                status: item.responseStatus,
+            })),
+        });
     }
     async closeReportingByDeadline(workspace) {
         const [unfinishedWorkpapers, draftFindings] = await Promise.all([
@@ -283,6 +333,7 @@ let WorkflowAutomationService = class WorkflowAutomationService {
                 });
                 if (!workspace)
                     continue;
+                await this.repairUndecidedAfterFieldAudit(workspace);
                 if (["AUDITOR_REVIEW", "RETURNED"].includes(workspace.instrumentStatus) &&
                     this.deadlinePassed(plan.instrumentReviewEnd, now)) {
                     await this.fallbackToDefaultForVerification(workspace);

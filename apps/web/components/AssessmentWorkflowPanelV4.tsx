@@ -19,6 +19,7 @@ const statusLabel = (value: unknown) => {
     INVALID: "Tidak valid",
     DESK_ACCEPTED: "Diterima pada desk review",
     FIELD_PENDING: "Menunggu assessment lapangan",
+    FIELD_NOT_ASSESSED: "Tidak dinilai (tahap lapangan berakhir)",
     NOT_STARTED: "Belum diisi",
     IN_PROGRESS: "Sedang diperbaiki Auditee",
     SUBMITTED: "Menunggu review Auditor",

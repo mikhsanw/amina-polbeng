@@ -185,7 +185,9 @@ let ReportDocumentController = class ReportDocumentController {
             const workpaper = question.workpapers.find((item) => ["APPROVED", "LOCKED"].includes(item.documentStatus)) || question.workpapers[0];
             const result = assessment?.standardResult ||
                 assessment?.processResult ||
-                "BELUM DINILAI";
+                (assessment?.responseStatus === "FIELD_NOT_ASSESSED"
+                    ? "TIDAK DINILAI (TAHAP LAPANGAN BERAKHIR)"
+                    : "BELUM DINILAI");
             lines.push("", `${index + 1}. ${plain(question.questionSnapshot)}`);
             lines.push(`   Sumber : ${question.masterQuestion.isoClause ? `ISO ${question.masterQuestion.isoClause.code}` : question.masterQuestion.standard?.code || "SPMI/Internal"}`);
             lines.push(`   Hasil  : ${plain(result)}`);

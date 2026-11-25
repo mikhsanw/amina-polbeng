@@ -51,6 +51,7 @@ const label = (value: unknown) => {
     KTS_MAYOR: "KTS/NC MAYOR",
     DESK_ACCEPTED: "DITERIMA PADA DESK REVIEW",
     FIELD_PENDING: "MENUNGGU ASSESSMENT LAPANGAN",
+    FIELD_NOT_ASSESSED: "TIDAK DINILAI (TAHAP LAPANGAN BERAKHIR)",
   };
   return labels[text] || text.replaceAll("_", " ");
 };

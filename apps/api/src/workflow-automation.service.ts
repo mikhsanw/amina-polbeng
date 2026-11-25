@@ -2,6 +2,19 @@ import { Injectable, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { AppService } from "./app.service";
 import { PrismaService } from "./prisma.service";
 
+/** Status butir yang sudah punya keputusan assessment lapangan. */
+const FIELD_DECIDED = ["APPROVED", "OPEN"];
+/** Status butir yang tidak sempat dinilai karena tahap lapangan ditutup tenggat. */
+export const FIELD_NOT_ASSESSED = "FIELD_NOT_ASSESSED";
+/** Workspace yang sudah melewati tahap assessment lapangan. */
+const AFTER_FIELD_AUDIT = [
+  "REPORTING",
+  "REPORT_REVIEW",
+  "FOLLOW_UP",
+  "CLOSED",
+  "ARCHIVED",
+];
+
 @Injectable()
 export class WorkflowAutomationService
   implements OnModuleInit, OnModuleDestroy
@@ -290,24 +303,75 @@ export class WorkflowAutomationService
     );
   }
 
-  private async closeFieldAuditByDeadline(workspace: any) {
-    const unresolved = await this.prisma.selfAssessment.count({
+  /**
+   * Butir yang belum diputuskan saat tahap lapangan berakhir ditandai
+   * FIELD_NOT_ASSESSED. Status asalnya dikembalikan untuk dicatat di log, agar
+   * bisa dipulihkan bila tenggat lapangan diperpanjang dan tahap dibuka ulang.
+   */
+  private async undecidedFieldItems(workspaceId: string) {
+    return this.prisma.selfAssessment.findMany({
       where: {
-        question: { workspaceId: workspace.id, excluded: false },
-        responseStatus: { notIn: ["APPROVED", "OPEN"] },
+        question: { workspaceId, excluded: false },
+        responseStatus: { notIn: [...FIELD_DECIDED, FIELD_NOT_ASSESSED] },
       },
+      select: { id: true, responseStatus: true },
     });
-    await this.prisma.auditWorkspace.update({
-      where: { id: workspace.id },
-      data: { status: "REPORTING" },
+  }
+
+  private async markNotAssessed(items: Array<{ id: string }>) {
+    if (!items.length) return;
+    await this.prisma.selfAssessment.updateMany({
+      where: { id: { in: items.map((item) => item.id) } },
+      data: { responseStatus: FIELD_NOT_ASSESSED },
     });
+  }
+
+  /**
+   * Perbaikan data lama: workspace yang tahap lapangannya sudah lewat tetapi
+   * masih menyisakan butir "menunggu assessment lapangan".
+   */
+  private async repairUndecidedAfterFieldAudit(workspace: any) {
+    if (!AFTER_FIELD_AUDIT.includes(workspace.status)) return;
+    const items = await this.undecidedFieldItems(workspace.id);
+    if (!items.length) return;
+    await this.markNotAssessed(items);
+    await this.app.log(
+      undefined,
+      "SYSTEM",
+      "AUTO_FIELD_NOT_ASSESSED_REPAIRED",
+      "AuditWorkspace",
+      workspace.id,
+      workspace.id,
+      {
+        workspaceStatus: workspace.status,
+        notAssessed: items.map((item) => ({
+          id: item.id,
+          status: item.responseStatus,
+        })),
+      },
+    );
+  }
+
+  private async closeFieldAuditByDeadline(workspace: any) {
+    const items = await this.undecidedFieldItems(workspace.id);
+    const unresolved = items.length;
+    await this.prisma.$transaction([
+      this.prisma.selfAssessment.updateMany({
+        where: { id: { in: items.map((item) => item.id) } },
+        data: { responseStatus: FIELD_NOT_ASSESSED },
+      }),
+      this.prisma.auditWorkspace.update({
+        where: { id: workspace.id },
+        data: { status: "REPORTING" },
+      }),
+    ]);
     for (const role of ["LEAD_AUDITOR", "AUDITOR"]) {
       await this.notifyAssignment(
         workspace.id,
         role,
         "WORKPAPER_SUBMITTED",
         "Assessment lapangan ditutup oleh tenggat",
-        `${unresolved} butir belum mempunyai keputusan lapangan dan harus dicatat dalam laporan.`,
+        `${unresolved} butir tidak sempat dinilai pada assessment lapangan dan dicatat "tidak dinilai" dalam laporan.`,
       );
     }
     await this.app.log(
@@ -317,7 +381,14 @@ export class WorkflowAutomationService
       "AuditWorkspace",
       workspace.id,
       workspace.id,
-      { unresolved, overdue: true },
+      {
+        unresolved,
+        overdue: true,
+        notAssessed: items.map((item) => ({
+          id: item.id,
+          status: item.responseStatus,
+        })),
+      },
     );
   }
 
@@ -403,6 +474,8 @@ export class WorkflowAutomationService
           include: { unit: true },
         });
         if (!workspace) continue;
+
+        await this.repairUndecidedAfterFieldAudit(workspace);
 
         if (
           ["AUDITOR_REVIEW", "RETURNED"].includes(workspace.instrumentStatus) &&

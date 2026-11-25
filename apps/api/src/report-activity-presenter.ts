@@ -10,6 +10,10 @@ const ACTIVITY_TEXT: Record<string, { stage: string; activity: string }> = {
     stage: "Perencanaan",
     activity: "Admin Mutu memperbarui batas waktu tahapan audit.",
   },
+  AUTO_FIELD_NOT_ASSESSED_REPAIRED: {
+    stage: "Assessment lapangan",
+    activity: "Sistem menandai butir yang tidak sempat dinilai karena tahap lapangan sudah berakhir.",
+  },
   FINDING_UPDATED: {
     stage: "Pelaporan",
     activity: "Auditor memperbaiki rumusan temuan saat penyusunan laporan.",

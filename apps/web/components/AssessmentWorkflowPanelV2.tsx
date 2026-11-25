@@ -318,7 +318,11 @@ function AuditorFieldAuditPanel({
                   </p>
                 </div>
                 <div className="result-stack">
-                  <span className="ami-pill">{status.replaceAll("_", " ")}</span>
+                  <span className="ami-pill">
+                    {status === "FIELD_NOT_ASSESSED"
+                      ? "TIDAK DINILAI (TAHAP LAPANGAN BERAKHIR)"
+                      : status.replaceAll("_", " ")}
+                  </span>
                   {result && <b>{resultLabel(result)}</b>}
                 </div>
               </header>

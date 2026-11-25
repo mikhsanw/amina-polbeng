@@ -63,6 +63,11 @@ const CHAIN_BREAKING_ACTIONS = [
     "WORKFLOW_REOPENED_BY_DEADLINE",
 ];
 const AUTO_SELF_ASSESSMENT_NOTE = "Batas self-assessment berakhir";
+const FIELD_NOT_ASSESSED = "FIELD_NOT_ASSESSED";
+const NOT_ASSESSED_LOGS = [
+    "AUTO_FIELD_AUDIT_DEADLINE",
+    "AUTO_FIELD_NOT_ASSESSED_REPAIRED",
+];
 function deadlinePassed(value, now) {
     if (!value)
         return false;
@@ -215,11 +220,32 @@ let WorkflowDeadlineController = class WorkflowDeadlineController {
             return null;
         const from = String(workspace.status);
         const to = target.from;
+        const restoreFieldItems = to === "FIELD_AUDIT" ? await this.notAssessedOrigins(workspace.id) : null;
         await this.flow.prisma.$transaction(async (tx) => {
             await tx.auditWorkspace.update({
                 where: { id: workspace.id },
                 data: { status: to },
             });
+            if (restoreFieldItems) {
+                const pending = await tx.selfAssessment.findMany({
+                    where: {
+                        question: { workspaceId: workspace.id },
+                        responseStatus: FIELD_NOT_ASSESSED,
+                    },
+                    select: { id: true },
+                });
+                const byStatus = new Map();
+                for (const item of pending) {
+                    const status = restoreFieldItems.get(item.id) || "FIELD_PENDING";
+                    byStatus.set(status, [...(byStatus.get(status) || []), item.id]);
+                }
+                for (const [status, ids] of byStatus) {
+                    await tx.selfAssessment.updateMany({
+                        where: { id: { in: ids } },
+                        data: { responseStatus: status },
+                    });
+                }
+            }
             if (to === "SELF_ASSESSMENT") {
                 const forced = {
                     question: { workspaceId: workspace.id },
@@ -256,6 +282,26 @@ let WorkflowDeadlineController = class WorkflowDeadlineController {
         }
         await this.flow.log(user.id, user.username, "WORKFLOW_REOPENED_BY_DEADLINE", "AuditWorkspace", workspace.id, workspace.id, { from, to, phase: target.label, deadline: deadline.toISOString() });
         return { from, to, phase: target.label, deadline };
+    }
+    async notAssessedOrigins(workspaceId) {
+        const logs = await this.flow.prisma.activityLog.findMany({
+            where: { workspaceId, action: { in: NOT_ASSESSED_LOGS } },
+            orderBy: { createdAt: "asc" },
+            select: { newValue: true },
+        });
+        const origins = new Map();
+        for (const log of logs) {
+            const items = log.newValue?.notAssessed;
+            if (!Array.isArray(items))
+                continue;
+            for (const item of items) {
+                const status = String(item?.status || "");
+                if (item?.id && status && status !== FIELD_NOT_ASSESSED) {
+                    origins.set(String(item.id), status);
+                }
+            }
+        }
+        return origins;
     }
     async notifyUnitAuditees(workspaceId, unitId, event, title, message) {
         const users = await this.flow.prisma.user.findMany({

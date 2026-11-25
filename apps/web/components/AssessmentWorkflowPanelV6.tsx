@@ -21,6 +21,7 @@ const statusLabel = (value: unknown) => {
     IN_PROGRESS: "Perbaikan masih draft",
     FIELD_CORRECTION_SUBMITTED: "Perbaikan sudah dikirim",
     FIELD_PENDING: "Menunggu keputusan lapangan",
+    FIELD_NOT_ASSESSED: "Tidak dinilai (tahap lapangan berakhir)",
     APPROVED: "Selesai",
     OPEN: "Menjadi temuan",
     PENDING: "Belum diperiksa",

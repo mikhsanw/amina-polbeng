@@ -15,10 +15,8 @@ export declare class WorkflowDeadlineController {
         followUpEnd: Date | null;
         id: string;
         workspaceId: string | null;
-        createdAt: Date;
-        unitId: string;
-        updatedAt: Date;
         programId: string;
+        unitId: string;
         included: boolean;
         instrumentReviewStart: Date | null;
         instrumentReviewEnd: Date | null;
@@ -29,6 +27,8 @@ export declare class WorkflowDeadlineController {
         fieldAuditStart: Date | null;
         reportingStart: Date | null;
         followUpStart: Date | null;
+        createdAt: Date;
+        updatedAt: Date;
     }>;
     updateDeadlines(id: string, body: any, user: any): Promise<{
         reopened: {
@@ -45,10 +45,8 @@ export declare class WorkflowDeadlineController {
         followUpEnd: Date | null;
         id: string;
         workspaceId: string | null;
-        createdAt: Date;
-        unitId: string;
-        updatedAt: Date;
         programId: string;
+        unitId: string;
         included: boolean;
         instrumentReviewStart: Date | null;
         instrumentReviewEnd: Date | null;
@@ -59,8 +57,11 @@ export declare class WorkflowDeadlineController {
         fieldAuditStart: Date | null;
         reportingStart: Date | null;
         followUpStart: Date | null;
+        createdAt: Date;
+        updatedAt: Date;
     }>;
     private reopenAfterExtension;
+    private notAssessedOrigins;
     private notifyUnitAuditees;
     submitDeskReview(id: string, user: any): Promise<{
         ok: boolean;
