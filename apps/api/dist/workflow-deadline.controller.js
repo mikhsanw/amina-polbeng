@@ -25,6 +25,49 @@ const DEADLINE_FIELDS = [
     "reportingEnd",
     "followUpEnd",
 ];
+const AUTO_CLOSE_STEPS = {
+    AUTO_SELF_ASSESSMENT_DEADLINE: {
+        from: "SELF_ASSESSMENT",
+        to: "DESK_REVIEW",
+        deadline: "selfAssessmentEnd",
+        label: "self-assessment",
+    },
+    AUTO_DESK_REVIEW_DEADLINE: {
+        from: "DESK_REVIEW",
+        to: "AUDIT",
+        deadline: "selfAssessmentReviewEnd",
+        label: "review Auditor",
+    },
+    AUTO_FIELD_AUDIT_DEADLINE: {
+        from: "FIELD_AUDIT",
+        to: "REPORTING",
+        deadline: "fieldAuditEnd",
+        label: "assessment lapangan",
+    },
+    AUTO_REPORTING_DEADLINE: {
+        from: "REPORTING",
+        to: "FOLLOW_UP",
+        deadline: "reportingEnd",
+        label: "penyusunan laporan",
+    },
+    AUTO_FOLLOW_UP_DEADLINE: {
+        from: "FOLLOW_UP",
+        to: "REPORT_REVIEW",
+        deadline: "followUpEnd",
+        label: "CAPA dan tindak lanjut",
+    },
+};
+const CHAIN_BREAKING_ACTIONS = [
+    "AUTO_INSTRUMENT_REVIEW_DEADLINE",
+    "AUTO_INSTRUMENT_VERIFICATION_DEADLINE",
+    "WORKFLOW_REOPENED_BY_DEADLINE",
+];
+const AUTO_SELF_ASSESSMENT_NOTE = "Batas self-assessment berakhir";
+function deadlinePassed(value, now) {
+    if (!value)
+        return false;
+    return endOfDay(value).getTime() < now.getTime();
+}
 function parseDate(value, label, required = false) {
     if (value == null || value === "") {
         if (required)
@@ -130,7 +173,113 @@ let WorkflowDeadlineController = class WorkflowDeadlineController {
             data: update,
         });
         await this.flow.log(user.id, user.username, "WORKFLOW_DEADLINES_UPDATED", "AuditWorkspace", id, id, { unitId: workspace.unitId, fields: Object.keys(update) });
-        return saved;
+        const reopened = await this.reopenAfterExtension(workspace, saved, user);
+        return { ...saved, reopened };
+    }
+    async reopenAfterExtension(workspace, plan, user) {
+        const logs = await this.flow.prisma.activityLog.findMany({
+            where: {
+                workspaceId: workspace.id,
+                action: {
+                    in: [...Object.keys(AUTO_CLOSE_STEPS), ...CHAIN_BREAKING_ACTIONS],
+                },
+            },
+            orderBy: { createdAt: "desc" },
+            select: { action: true, createdAt: true },
+        });
+        const chain = [];
+        let expected = String(workspace.status);
+        for (const log of logs) {
+            const step = AUTO_CLOSE_STEPS[log.action];
+            if (!step || step.to !== expected)
+                break;
+            chain.push(step);
+            expected = step.from;
+        }
+        if (!chain.length)
+            return null;
+        const hasCapa = (await this.flow.prisma.correctiveAction.count({
+            where: { workspaceId: workspace.id },
+        })) > 0;
+        const now = new Date();
+        let target = null;
+        for (const step of [...chain].reverse()) {
+            if (hasCapa && step.from !== "FOLLOW_UP")
+                continue;
+            if (!deadlinePassed(plan[step.deadline], now)) {
+                target = step;
+                break;
+            }
+        }
+        if (!target)
+            return null;
+        const from = String(workspace.status);
+        const to = target.from;
+        await this.flow.prisma.$transaction(async (tx) => {
+            await tx.auditWorkspace.update({
+                where: { id: workspace.id },
+                data: { status: to },
+            });
+            if (to === "SELF_ASSESSMENT") {
+                const forced = {
+                    question: { workspaceId: workspace.id },
+                    responseStatus: "SUBMITTED",
+                    returnNote: { startsWith: AUTO_SELF_ASSESSMENT_NOTE },
+                };
+                await tx.selfAssessment.updateMany({
+                    where: {
+                        ...forced,
+                        OR: [{ implementationDescription: null }, { implementationDescription: "" }],
+                    },
+                    data: { responseStatus: "NOT_STARTED", submittedAt: null, returnNote: null },
+                });
+                await tx.selfAssessment.updateMany({
+                    where: forced,
+                    data: { responseStatus: "IN_PROGRESS", submittedAt: null, returnNote: null },
+                });
+            }
+        });
+        const deadline = plan[target.deadline];
+        const deadlineText = new Intl.DateTimeFormat("id-ID", {
+            dateStyle: "medium",
+            timeZone: "UTC",
+        }).format(deadline);
+        const title = `Tahap ${target.label} dibuka kembali`;
+        const message = `${workspace.unit.name}: tenggat diperpanjang sampai ${deadlineText}. Tahap ${target.label} dibuka kembali.`;
+        if (["SELF_ASSESSMENT", "FOLLOW_UP"].includes(to)) {
+            await this.notifyUnitAuditees(workspace.id, workspace.unitId, to === "SELF_ASSESSMENT" ? "SELF_ASSESSMENT_OPENED" : "CORRECTIVE_ACTION_SUBMITTED", title, message);
+        }
+        if (["DESK_REVIEW", "FIELD_AUDIT", "REPORTING"].includes(to)) {
+            for (const role of ["LEAD_AUDITOR", "AUDITOR"]) {
+                await this.flow.notifyRole(workspace.id, role, to === "DESK_REVIEW" ? "SELF_ASSESSMENT_SUBMITTED" : "WORKPAPER_RETURNED", title, message, "AuditWorkspace", workspace.id);
+            }
+        }
+        await this.flow.log(user.id, user.username, "WORKFLOW_REOPENED_BY_DEADLINE", "AuditWorkspace", workspace.id, workspace.id, { from, to, phase: target.label, deadline: deadline.toISOString() });
+        return { from, to, phase: target.label, deadline };
+    }
+    async notifyUnitAuditees(workspaceId, unitId, event, title, message) {
+        const users = await this.flow.prisma.user.findMany({
+            where: {
+                status: "ACTIVE",
+                deletedAt: null,
+                unitId,
+                roles: { some: { role: { code: "AUDITEE" } } },
+            },
+            select: { id: true },
+        });
+        if (!users.length)
+            return;
+        await this.flow.prisma.notification.createMany({
+            data: users.map((recipient) => ({
+                workspaceId,
+                recipientUserId: recipient.id,
+                event,
+                title,
+                message,
+                entityType: "AuditWorkspace",
+                entityId: workspaceId,
+            })),
+        });
     }
     async submitDeskReview(id, user) {
         const workspace = await this.flow.workspace(id, user);

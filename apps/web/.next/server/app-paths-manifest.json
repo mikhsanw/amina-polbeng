@@ -4,7 +4,7 @@
   "/[section]/page": "app/[section]/page.js",
   "/admin/[section]/page": "app/admin/[section]/page.js",
   "/audit-print/[id]/page": "app/audit-print/[id]/page.js",
-  "/audit-workspaces/[id]/page": "app/audit-workspaces/[id]/page.js",
   "/dashboard/page": "app/dashboard/page.js",
+  "/audit-workspaces/[id]/page": "app/audit-workspaces/[id]/page.js",
   "/page": "app/page.js"
 }

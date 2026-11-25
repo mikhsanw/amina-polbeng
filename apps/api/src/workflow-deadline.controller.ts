@@ -22,6 +22,63 @@ const DEADLINE_FIELDS = [
 
 type DeadlineField = (typeof DEADLINE_FIELDS)[number];
 
+/**
+ * Perpindahan status yang dilakukan WorkflowAutomationService saat tenggat
+ * lewat. Log AUTO_* tidak menyimpan status asal, jadi asal/tujuannya diturunkan
+ * dari jenis log. Tahap instrumen sengaja tidak dimasukkan: penutupan
+ * otomatisnya mengganti usulan Auditor dengan instrumen default dan isinya tidak
+ * dapat dipulihkan, sehingga tidak dibuka ulang secara otomatis.
+ */
+const AUTO_CLOSE_STEPS: Record<
+  string,
+  { from: string; to: string; deadline: DeadlineField; label: string }
+> = {
+  AUTO_SELF_ASSESSMENT_DEADLINE: {
+    from: "SELF_ASSESSMENT",
+    to: "DESK_REVIEW",
+    deadline: "selfAssessmentEnd",
+    label: "self-assessment",
+  },
+  AUTO_DESK_REVIEW_DEADLINE: {
+    from: "DESK_REVIEW",
+    to: "AUDIT",
+    deadline: "selfAssessmentReviewEnd",
+    label: "review Auditor",
+  },
+  AUTO_FIELD_AUDIT_DEADLINE: {
+    from: "FIELD_AUDIT",
+    to: "REPORTING",
+    deadline: "fieldAuditEnd",
+    label: "assessment lapangan",
+  },
+  AUTO_REPORTING_DEADLINE: {
+    from: "REPORTING",
+    to: "FOLLOW_UP",
+    deadline: "reportingEnd",
+    label: "penyusunan laporan",
+  },
+  AUTO_FOLLOW_UP_DEADLINE: {
+    from: "FOLLOW_UP",
+    to: "REPORT_REVIEW",
+    deadline: "followUpEnd",
+    label: "CAPA dan tindak lanjut",
+  },
+};
+
+/** Log yang memutus rantai penutupan otomatis saat ditelusuri mundur. */
+const CHAIN_BREAKING_ACTIONS = [
+  "AUTO_INSTRUMENT_REVIEW_DEADLINE",
+  "AUTO_INSTRUMENT_VERIFICATION_DEADLINE",
+  "WORKFLOW_REOPENED_BY_DEADLINE",
+];
+
+const AUTO_SELF_ASSESSMENT_NOTE = "Batas self-assessment berakhir";
+
+function deadlinePassed(value: Date | null | undefined, now: Date) {
+  if (!value) return false;
+  return endOfDay(value).getTime() < now.getTime();
+}
+
 function parseDate(value: unknown, label: string, required = false) {
   if (value == null || value === "") {
     if (required) throw new BadRequestException(`${label} wajib diisi.`);
@@ -159,7 +216,154 @@ export class WorkflowDeadlineController {
       id,
       { unitId: workspace.unitId, fields: Object.keys(update) },
     );
-    return saved;
+    const reopened = await this.reopenAfterExtension(workspace, saved, user);
+    return { ...saved, reopened };
+  }
+
+  /**
+   * Bila workspace sampai di status sekarang karena ditutup otomatis oleh
+   * tenggat, dan tenggat tahap tersebut kini diperpanjang, kembalikan workspace
+   * ke tahap paling awal dalam rantai penutupan otomatis yang tenggatnya belum
+   * lewat.
+   */
+  private async reopenAfterExtension(workspace: any, plan: any, user: any) {
+    const logs = await this.flow.prisma.activityLog.findMany({
+      where: {
+        workspaceId: workspace.id,
+        action: {
+          in: [...Object.keys(AUTO_CLOSE_STEPS), ...CHAIN_BREAKING_ACTIONS],
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      select: { action: true, createdAt: true },
+    });
+
+    // Rantai: log AUTO_* berurutan yang berakhir di status sekarang.
+    const chain: Array<(typeof AUTO_CLOSE_STEPS)[string]> = [];
+    let expected = String(workspace.status);
+    for (const log of logs) {
+      const step = AUTO_CLOSE_STEPS[log.action];
+      if (!step || step.to !== expected) break;
+      chain.push(step);
+      expected = step.from;
+    }
+    if (!chain.length) return null;
+
+    // Setelah tindak lanjut berjalan dan CAPA sudah ada, jangan mundur melewati
+    // FOLLOW_UP karena pengisian CAPA akan terkunci lagi.
+    const hasCapa =
+      (await this.flow.prisma.correctiveAction.count({
+        where: { workspaceId: workspace.id },
+      })) > 0;
+    const now = new Date();
+    let target: (typeof AUTO_CLOSE_STEPS)[string] | null = null;
+    // chain berurutan dari yang terbaru; telusuri dari yang paling awal.
+    for (const step of [...chain].reverse()) {
+      if (hasCapa && step.from !== "FOLLOW_UP") continue;
+      if (!deadlinePassed(plan[step.deadline], now)) {
+        target = step;
+        break;
+      }
+    }
+    if (!target) return null;
+
+    const from = String(workspace.status);
+    const to = target.from;
+    await this.flow.prisma.$transaction(async (tx) => {
+      await tx.auditWorkspace.update({
+        where: { id: workspace.id },
+        data: { status: to as any },
+      });
+      if (to === "SELF_ASSESSMENT") {
+        // Butir yang dikirim paksa oleh sistem dikembalikan ke pengisian.
+        const forced = {
+          question: { workspaceId: workspace.id },
+          responseStatus: "SUBMITTED",
+          returnNote: { startsWith: AUTO_SELF_ASSESSMENT_NOTE },
+        };
+        await tx.selfAssessment.updateMany({
+          where: {
+            ...forced,
+            OR: [{ implementationDescription: null }, { implementationDescription: "" }],
+          },
+          data: { responseStatus: "NOT_STARTED", submittedAt: null, returnNote: null },
+        });
+        await tx.selfAssessment.updateMany({
+          where: forced,
+          data: { responseStatus: "IN_PROGRESS", submittedAt: null, returnNote: null },
+        });
+      }
+    });
+
+    const deadline = plan[target.deadline] as Date;
+    const deadlineText = new Intl.DateTimeFormat("id-ID", {
+      dateStyle: "medium",
+      timeZone: "UTC",
+    }).format(deadline);
+    const title = `Tahap ${target.label} dibuka kembali`;
+    const message = `${workspace.unit.name}: tenggat diperpanjang sampai ${deadlineText}. Tahap ${target.label} dibuka kembali.`;
+    if (["SELF_ASSESSMENT", "FOLLOW_UP"].includes(to)) {
+      await this.notifyUnitAuditees(
+        workspace.id,
+        workspace.unitId,
+        to === "SELF_ASSESSMENT" ? "SELF_ASSESSMENT_OPENED" : "CORRECTIVE_ACTION_SUBMITTED",
+        title,
+        message,
+      );
+    }
+    if (["DESK_REVIEW", "FIELD_AUDIT", "REPORTING"].includes(to)) {
+      for (const role of ["LEAD_AUDITOR", "AUDITOR"]) {
+        await this.flow.notifyRole(
+          workspace.id,
+          role,
+          to === "DESK_REVIEW" ? "SELF_ASSESSMENT_SUBMITTED" : "WORKPAPER_RETURNED",
+          title,
+          message,
+          "AuditWorkspace",
+          workspace.id,
+        );
+      }
+    }
+    await this.flow.log(
+      user.id,
+      user.username,
+      "WORKFLOW_REOPENED_BY_DEADLINE",
+      "AuditWorkspace",
+      workspace.id,
+      workspace.id,
+      { from, to, phase: target.label, deadline: deadline.toISOString() },
+    );
+    return { from, to, phase: target.label, deadline };
+  }
+
+  private async notifyUnitAuditees(
+    workspaceId: string,
+    unitId: string,
+    event: any,
+    title: string,
+    message: string,
+  ) {
+    const users = await this.flow.prisma.user.findMany({
+      where: {
+        status: "ACTIVE",
+        deletedAt: null,
+        unitId,
+        roles: { some: { role: { code: "AUDITEE" } } },
+      },
+      select: { id: true },
+    });
+    if (!users.length) return;
+    await this.flow.prisma.notification.createMany({
+      data: users.map((recipient) => ({
+        workspaceId,
+        recipientUserId: recipient.id,
+        event,
+        title,
+        message,
+        entityType: "AuditWorkspace",
+        entityId: workspaceId,
+      })),
+    });
   }
 
   @Post("workspaces/:id/desk-review/submit")

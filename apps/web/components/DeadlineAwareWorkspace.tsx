@@ -82,15 +82,16 @@ export function DeadlineAwareWorkspace({
   async function perform(
     path: string,
     init: RequestInit,
-    success: string,
+    success: string | ((result: any) => string),
   ) {
     setBusy(true);
     setError("");
     setMessage("");
     try {
-      await api(path, init);
-      setMessage(success);
-      window.setTimeout(() => location.reload(), 450);
+      const result = await api(path, init);
+      const text = typeof success === "function" ? success(result) : success;
+      setMessage(text);
+      window.setTimeout(() => location.reload(), result?.reopened ? 1800 : 450);
       return true;
     } catch (reason: any) {
       setError(reason.message || "Proses gagal.");
@@ -152,7 +153,10 @@ export function DeadlineAwareWorkspace({
     await perform(
       `/audit-flow/workspaces/${id}/deadlines`,
       { method: "PUT", body: JSON.stringify(deadlineDraft) },
-      "Tenggat audit diperbarui.",
+      (result) =>
+        result?.reopened
+          ? `Tenggat audit diperbarui. Tahap ${result.reopened.phase} dibuka kembali.`
+          : "Tenggat audit diperbarui.",
     );
   }
 

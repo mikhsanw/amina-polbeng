@@ -4,7 +4,7 @@
   "/[section]/page": "/[section]",
   "/admin/[section]/page": "/admin/[section]",
   "/audit-print/[id]/page": "/audit-print/[id]",
-  "/audit-workspaces/[id]/page": "/audit-workspaces/[id]",
   "/dashboard/page": "/dashboard",
+  "/audit-workspaces/[id]/page": "/audit-workspaces/[id]",
   "/page": "/"
 }
