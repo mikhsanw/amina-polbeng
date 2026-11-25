@@ -10,6 +10,10 @@ const ACTIVITY_TEXT: Record<string, { stage: string; activity: string }> = {
     stage: "Perencanaan",
     activity: "Admin Mutu memperbarui batas waktu tahapan audit.",
   },
+  FINDING_UPDATED: {
+    stage: "Pelaporan",
+    activity: "Auditor memperbaiki rumusan temuan saat penyusunan laporan.",
+  },
   WORKFLOW_REOPENED_BY_DEADLINE: {
     stage: "Perencanaan",
     activity: "Tahap yang ditutup otomatis oleh tenggat dibuka kembali karena tenggat diperpanjang.",

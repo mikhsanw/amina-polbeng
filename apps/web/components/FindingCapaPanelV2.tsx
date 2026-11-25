@@ -11,6 +11,7 @@ type RunAction = (
 
 type ModalState =
   | { type: "capa"; finding: any; action?: any; edit?: boolean }
+  | { type: "finding"; finding: any }
   | { type: "auditor"; finding: any; action: any }
   | { type: "lead"; finding: any; action: any; recommendation: any }
   | null;
@@ -110,6 +111,14 @@ export function FindingCapaPanel({
   const workspaceStatus = String(flow?.workspace?.status || workspace.status || "");
   const capaLockedNote = capaLockReason(workspaceStatus);
   const capaWindow = flow?.capaWindow;
+  const findingEditWindow = flow?.findingEditWindow;
+  const findingEditNote =
+    workspaceStatus === "REPORTING" &&
+    findingEditWindow &&
+    !findingEditWindow.open &&
+    findingEditWindow.deadline
+      ? `Masa penyusunan laporan berakhir ${formatDate(findingEditWindow.deadline)}.`
+      : "";
   const capaDeadlineNote =
     capaWindow && !capaWindow.open && capaWindow.deadline
       ? `Masa pengisian CAPA berakhir ${formatDate(capaWindow.deadline)}.`
@@ -130,6 +139,22 @@ export function FindingCapaPanel({
       evidenceUrl: "",
     });
     setModal({ type: "capa", finding, action, edit });
+  }
+
+  function openFindingEdit(finding: any) {
+    setDraft({
+      findingType: finding.findingType,
+      criteriaRegulation: finding.criteriaRegulation || "",
+      criteriaIso: finding.criteriaIso === "—" ? "" : finding.criteriaIso || "",
+      condition: finding.condition || "",
+      objectiveEvidence: finding.objectiveEvidence || "",
+      gapStatement: finding.gapStatement || "",
+      riskImpact: finding.riskImpact || "",
+      dueDate: finding.dueDate
+        ? new Date(finding.dueDate).toISOString().slice(0, 10)
+        : "",
+    });
+    setModal({ type: "finding", finding });
   }
 
   function openAuditor(finding: any, action: any) {
@@ -178,7 +203,13 @@ export function FindingCapaPanel({
     event.preventDefault();
     if (!modal) return;
     let ok = false;
-    if (modal.type === "capa" && modal.edit) {
+    if (modal.type === "finding") {
+      ok = await run(
+        `/audit-flow/findings/${modal.finding.id}/update`,
+        { method: "POST", body: JSON.stringify(draft) },
+        "Perubahan temuan disimpan.",
+      );
+    } else if (modal.type === "capa" && modal.edit) {
       ok = await run(
         `/audit-flow/actions/${modal.action.id}/capa-update`,
         { method: "POST", body: JSON.stringify(draft) },
@@ -414,6 +445,26 @@ export function FindingCapaPanel({
                       </small>
                     )}
 
+                    {isAuditor &&
+                      workspaceStatus === "REPORTING" &&
+                      ["DRAFT", "REVIEW", "OPEN"].includes(finding.status) && (
+                        <div className="capa-submit">
+                          <button
+                            type="button"
+                            className="small"
+                            disabled={busy || Boolean(findingEditNote)}
+                            title={findingEditNote || undefined}
+                            onClick={() => openFindingEdit(finding)}
+                          >
+                            Edit Temuan
+                          </button>
+                          <small className={findingEditNote ? "capa-locked-note" : "capa-hint"}>
+                            {findingEditNote ||
+                              "Rumusan temuan masih dapat diperbaiki selama penyusunan laporan."}
+                          </small>
+                        </div>
+                      )}
+
                     {isAuditor && action?.status === "READY_VERIFY" && !recommendation && (
                       <button
                         type="button"
@@ -450,7 +501,9 @@ export function FindingCapaPanel({
               <div>
                 <small>{modal.finding.code}</small>
                 <h3>
-                  {modal.type === "capa"
+                  {modal.type === "finding"
+                    ? "Edit Temuan"
+                    : modal.type === "capa"
                     ? modal.edit
                       ? "Edit CAPA"
                       : "CAPA dan Bukti Pelaksanaan"
@@ -502,6 +555,44 @@ export function FindingCapaPanel({
                 </>
               )}
 
+              {modal.type === "finding" && (
+                <>
+                  <label>
+                    Klasifikasi temuan
+                    <select
+                      value={draft.findingType}
+                      disabled={modal.finding.isIso}
+                      onChange={(event) => setDraft({ ...draft, findingType: event.target.value })}
+                    >
+                      {!["OBS", "KTS_MINOR", "KTS_MAYOR"].includes(draft.findingType) && (
+                        <option value={draft.findingType}>{label(draft.findingType)}</option>
+                      )}
+                      <option value="OBS">OBS</option>
+                      <option value="KTS_MINOR">KTS/NC Minor</option>
+                      <option value="KTS_MAYOR">KTS/NC Mayor</option>
+                    </select>
+                    {modal.finding.isIso && (
+                      <small className="capa-hint">
+                        Klasifikasi butir ISO mengikuti hasil assessment lapangan.
+                      </small>
+                    )}
+                  </label>
+                  <TextArea label="Kriteria standar/regulasi" value={draft.criteriaRegulation} set={(value) => setDraft({ ...draft, criteriaRegulation: value })} />
+                  <label>
+                    Klausul ISO (opsional)
+                    <input value={draft.criteriaIso || ""} onChange={(event) => setDraft({ ...draft, criteriaIso: event.target.value })} />
+                  </label>
+                  <TextArea label="Kondisi" value={draft.condition} set={(value) => setDraft({ ...draft, condition: value })} />
+                  <TextArea label="Bukti objektif" value={draft.objectiveEvidence} set={(value) => setDraft({ ...draft, objectiveEvidence: value })} />
+                  <TextArea label="Kesenjangan" value={draft.gapStatement} set={(value) => setDraft({ ...draft, gapStatement: value })} />
+                  <TextArea label="Dampak risiko" value={draft.riskImpact} set={(value) => setDraft({ ...draft, riskImpact: value })} />
+                  <label>
+                    Batas waktu perbaikan
+                    <input required type="date" value={draft.dueDate || ""} onChange={(event) => setDraft({ ...draft, dueDate: event.target.value })} />
+                  </label>
+                </>
+              )}
+
               {modal.type === "auditor" && (
                 <>
                   <Decision value={draft.decision} set={(value) => setDraft({ ...draft, decision: value })} title="Rekomendasi Auditor" />
@@ -533,7 +624,9 @@ export function FindingCapaPanel({
             <footer>
               <button type="button" onClick={() => setModal(null)}>Batal</button>
               <button className="primary" disabled={busy}>
-                {modal.type === "capa"
+                {modal.type === "finding"
+                  ? "Simpan Temuan"
+                  : modal.type === "capa"
                   ? modal.edit
                     ? "Simpan Perubahan"
                     : "Kirim CAPA"

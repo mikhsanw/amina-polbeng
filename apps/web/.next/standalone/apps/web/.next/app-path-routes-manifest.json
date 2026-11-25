@@ -1,10 +1,10 @@
 {
   "/_not-found/page": "/_not-found",
   "/icon.png/route": "/icon.png",
-  "/[section]/page": "/[section]",
   "/admin/[section]/page": "/admin/[section]",
+  "/[section]/page": "/[section]",
   "/audit-print/[id]/page": "/audit-print/[id]",
-  "/dashboard/page": "/dashboard",
   "/audit-workspaces/[id]/page": "/audit-workspaces/[id]",
-  "/page": "/"
+  "/page": "/",
+  "/dashboard/page": "/dashboard"
 }

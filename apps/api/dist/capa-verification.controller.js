@@ -26,6 +26,11 @@ function text(value, label) {
     return result;
 }
 const CAPA_OPEN_WORKSPACE_STATUSES = ["FOLLOW_UP", "REPORT_REVIEW"];
+const EDITABLE_FINDING_STATUSES = ["DRAFT", "REVIEW", "OPEN"];
+const FINDING_TYPES = new Set(["OBS", "KTS_MINOR", "KTS_MAYOR"]);
+function isIsoMaster(master) {
+    return Boolean(master?.isoClauseId) || master?.criterionSource === "ISO_9001";
+}
 function capaPayload(body) {
     const targetDate = new Date(text(body.targetDate, "Target penyelesaian"));
     if (Number.isNaN(targetDate.getTime())) {
@@ -117,6 +122,9 @@ let CapaVerificationController = class CapaVerificationController {
                             id: true,
                             publishedQuestion: true,
                             questionSnapshot: true,
+                            masterQuestion: {
+                                select: { isoClauseId: true, criterionSource: true },
+                            },
                         },
                     },
                     actions: {
@@ -143,12 +151,20 @@ let CapaVerificationController = class CapaVerificationController {
             list.push(evidence);
             evidenceByAction.set(actionId, list);
         }
-        const window = await this.schedule.state(id, "FOLLOW_UP");
+        const [window, reportingWindow] = await Promise.all([
+            this.schedule.state(id, "FOLLOW_UP"),
+            this.schedule.state(id, "REPORTING"),
+        ]);
         return {
             workspace,
             capaWindow: { open: window.open, deadline: window.deadline },
+            findingEditWindow: {
+                open: workspace.status === "REPORTING" && reportingWindow.open,
+                deadline: reportingWindow.deadline,
+            },
             findings: findings.map((finding) => ({
                 ...finding,
+                isIso: isIsoMaster(finding.question?.masterQuestion),
                 actions: finding.actions.map((action) => ({
                     ...action,
                     evidences: evidenceByAction.get(action.id) || [],
@@ -216,6 +232,75 @@ let CapaVerificationController = class CapaVerificationController {
             targetDate: targetDate.toISOString(),
         });
         return result;
+    }
+    async updateFinding(id, body, user) {
+        const finding = await this.flow.prisma.finding.findUniqueOrThrow({
+            where: { id },
+            include: { question: { include: { masterQuestion: true } } },
+        });
+        const workspace = await this.flow.workspace(finding.workspaceId, user);
+        this.flow.requireAssignment(workspace, user, ["AUDITOR", "LEAD_AUDITOR"]);
+        this.flow.requireStatus(workspace.status, ["REPORTING"]);
+        this.flow.requireStatus(finding.status, EDITABLE_FINDING_STATUSES);
+        await this.schedule.requireOpen(workspace.id, "REPORTING");
+        const iso = isIsoMaster(finding.question?.masterQuestion);
+        let findingType = String(finding.findingType);
+        if (!iso && body.findingType) {
+            findingType = String(body.findingType).trim().toUpperCase();
+            if (!FINDING_TYPES.has(findingType)) {
+                throw new common_1.BadRequestException("Klasifikasi temuan harus OBS, KTS/NC Minor, atau KTS/NC Mayor.");
+            }
+        }
+        const dueDate = new Date(text(body.dueDate, "Batas waktu perbaikan"));
+        if (Number.isNaN(dueDate.getTime())) {
+            throw new common_1.BadRequestException("Batas waktu perbaikan tidak valid.");
+        }
+        const data = {
+            findingType: findingType,
+            criteriaRegulation: text(body.criteriaRegulation, "Kriteria standar/regulasi"),
+            criteriaIso: String(body.criteriaIso ?? "").trim() || "—",
+            condition: text(body.condition, "Kondisi"),
+            objectiveEvidence: text(body.objectiveEvidence, "Bukti objektif"),
+            gapStatement: text(body.gapStatement, "Kesenjangan"),
+            riskImpact: text(body.riskImpact, "Dampak risiko"),
+            dueDate,
+        };
+        const before = {
+            findingType: finding.findingType,
+            criteriaRegulation: finding.criteriaRegulation,
+            criteriaIso: finding.criteriaIso,
+            condition: finding.condition,
+            objectiveEvidence: finding.objectiveEvidence,
+            gapStatement: finding.gapStatement,
+            riskImpact: finding.riskImpact,
+            dueDate: finding.dueDate?.toISOString() ?? null,
+        };
+        const changed = Object.keys(data).filter((key) => String(key === "dueDate" ? data.dueDate.toISOString() : data[key]) !==
+            String(before[key] ?? ""));
+        if (!changed.length)
+            return finding;
+        const updated = await this.flow.prisma.$transaction(async (tx) => {
+            const result = await tx.finding.update({ where: { id }, data });
+            if (!iso && findingType !== finding.findingType && finding.auditQuestionId) {
+                await tx.workpaper.updateMany({
+                    where: {
+                        auditQuestionId: finding.auditQuestionId,
+                        auditStatus: finding.findingType,
+                    },
+                    data: { auditStatus: findingType },
+                });
+            }
+            return result;
+        });
+        await this.flow.log(user.id, user.username, "FINDING_UPDATED", "Finding", id, finding.workspaceId, {
+            findingCode: finding.code,
+            changed,
+            ...Object.fromEntries(changed.map((key) => [
+                key,
+                key === "dueDate" ? data.dueDate.toISOString() : data[key],
+            ])),
+        }, Object.fromEntries(changed.map((key) => [key, before[key]])));
+        return updated;
     }
     async updateCapa(id, body, user) {
         const action = await this.editableCapa(id, user);
@@ -444,6 +529,16 @@ __decorate([
     __metadata("design:paramtypes", [String, Object, Object]),
     __metadata("design:returntype", Promise)
 ], CapaVerificationController.prototype, "submitCapa", null);
+__decorate([
+    (0, common_1.Post)("findings/:id/update"),
+    (0, auth_1.Roles)("AUDITOR", "KETUA_AUDITOR"),
+    __param(0, (0, common_1.Param)("id")),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, auth_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object, Object]),
+    __metadata("design:returntype", Promise)
+], CapaVerificationController.prototype, "updateFinding", null);
 __decorate([
     (0, common_1.Post)("actions/:id/capa-update"),
     (0, auth_1.Roles)("AUDITEE"),

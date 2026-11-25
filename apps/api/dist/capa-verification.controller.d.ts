@@ -80,7 +80,12 @@ export declare class CapaVerificationController {
             open: boolean;
             deadline: Date | null;
         };
+        findingEditWindow: {
+            open: boolean;
+            deadline: Date | null;
+        };
         findings: {
+            isIso: boolean;
             actions: {
                 evidences: any[];
                 verifications: {
@@ -117,6 +122,10 @@ export declare class CapaVerificationController {
                 id: string;
                 questionSnapshot: string;
                 publishedQuestion: string | null;
+                masterQuestion: {
+                    criterionSource: string;
+                    isoClauseId: string | null;
+                };
             } | null;
             id: string;
             status: import(".prisma/client").$Enums.FindingStatus;
@@ -175,6 +184,24 @@ export declare class CapaVerificationController {
             validatedAt: Date | null;
             validationNote: string | null;
         };
+    }>;
+    updateFinding(id: string, body: any, user: any): Promise<{
+        id: string;
+        status: import(".prisma/client").$Enums.FindingStatus;
+        createdAt: Date;
+        updatedAt: Date;
+        code: string;
+        workspaceId: string;
+        auditQuestionId: string | null;
+        findingType: import(".prisma/client").$Enums.FindingType;
+        criteriaRegulation: string;
+        criteriaIso: string;
+        condition: string;
+        objectiveEvidence: string;
+        gapStatement: string;
+        riskImpact: string;
+        ownerUserId: string | null;
+        dueDate: Date | null;
     }>;
     updateCapa(id: string, body: any, user: any): Promise<{
         id: string;
